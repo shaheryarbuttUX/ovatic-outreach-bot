@@ -1,0 +1,37 @@
+APPROVED by user 2026-10-31 ("haan fit hai").
+Template + filters + success target approved one-time. Har lead par alag
+approval nahi hogi. Live send ke liye abhi bhi live Playwright submitter
+aur Sheet service account secret chahiye, wo agle setup step me banega.
+Channel: SIRF contact form, email nahi.
+Identity: Shaheryar Butt, individual freelancer, sath team hai. Ovatic ka naam nahi.
+
+Subject (form ka subject field ho to): Freelance UI/UX designer for overflow work
+
+Hi [Agency Name] team,
+
+I am Shaheryar Butt, a Web & Product Designer with 9+ years in UI/UX,
+Webflow, WordPress and Shopify work. I am available as a freelance designer
+for overflow or project-based work: dashboards, websites, landing pages and
+design systems, in Figma, delivered on your timeline. I work with a small
+team behind me, so the work does not depend on one person alone, and a
+bigger project can be handled without delay.
+
+Availability: 20-30 hours/week for me personally, $18-20/hr, with team
+support if the project needs more capacity. Happy to start with one small
+test task so you can judge the work before committing to more.
+
+Do you ever work with remote freelance designers, or outsource any design
+work when your team is full?
+
+Best,
+Shaheryar Butt
+Web & Product Designer
+Behance: https://www.behance.net/sherybutt
+LinkedIn: https://linkedin.com/in/shaheryar-butt/
+Figma (har lead ke hisab se SIRF ek, dono nahi):
+- Web agencies ke liye Website Figma: https://www.figma.com/design/9LfCw6faDaXvFQfWSFkM2C/Website-Portfolio--Client-Sharing-?node-id=159-12849&t=u2nBTJ3IEOLMJnQh-1
+- Product/SaaS agencies ke liye Dashboard Figma: https://www.figma.com/design/4OzS8KcSeOLgXVbGMjCVZ1/Dashboard-Portfolio--Client-Sharing-?node-id=1-15548&t=YUB9pL13pk5InsaD-1
+[Opt-out line: reply no thanks and I will not contact again]
+
+Personalization line (har lead ki apni, site se li hui) message ke shuru me
+alag line ke tor par add hogi, template ka baqi hissa same rahega.
