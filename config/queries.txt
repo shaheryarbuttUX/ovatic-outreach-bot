@@ -1,0 +1,14 @@
+# Format: REGION | search query. Har run me 3 queries rotate hoti hain.
+# US
+US-TX | small web design agency Texas boutique studio
+US-CA | small web design agency California WordPress Shopify
+US-NY | boutique marketing agency New York web design
+US-FL | small web design studio Florida
+US | web design agency overflow white label partner wanted
+# EU, English business communication wale markets pehle
+UK | small web design agency London boutique studio
+UK | boutique marketing agency Manchester web design
+NL | small web design agency Amsterdam Netherlands
+DE | small web design agency Berlin English
+IE | small web design agency Dublin Ireland
+SE | small web design agency Stockholm Sweden
