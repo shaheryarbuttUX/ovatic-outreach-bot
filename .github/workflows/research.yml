@@ -1,0 +1,21 @@
+name: research-leads
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Tick every 10 min, research only when due (see script guard)
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/research.py --max-new 50
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "research tick done, lead data lives in Google Sheet only, not in repo"

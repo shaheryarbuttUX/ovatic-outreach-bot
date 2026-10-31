@@ -1,0 +1,26 @@
+name: send-forms
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'true = koi live submit nahi, sirf log'
+        default: 'true'
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Tick every 10 min, send only when guards pass (see script)
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'true' }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/send_form.py --max-send 10
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "send tick done, lead data lives in Google Sheet only, not in repo"
