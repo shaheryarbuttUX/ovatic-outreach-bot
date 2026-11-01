@@ -1,24 +1,30 @@
 """Autonomous research run: koi manual seed list nahi chahiye.
 
-Har run khud ye karta hai:
+Har hourly run ye karta hai:
 1. config/queries.txt se US + EU agency queries uthata hai (rotate hoti hain)
 2. DuckDuckGo HTML search se nayi agency websites nikalta hai (koi API key nahi)
 3. Har website ka homepage + /contact page kholta hai, form URL nikalta hai
 4. CAPTCHA signal ho to skip, personalization line site ki apni description se
    banata hai (invent nahi karta), warna lead queue me nahi jata
-5. data/queue.csv me append karta hai, dedupe data/sent.csv + queue se hota hai
+5. Google Sheet Queue tab me append karta hai, dedupe Queue + Sent se hota hai
 
-Input:  config/queries.txt (ek query per line, region prefix ke sath)
-        data/seeds.csv (optional extra, manual nahi lazmi)
-Output: data/queue.csv
 Rules: US + EU only, Pakistan/India nahi. Personal emails scrape nahi.
+Data Sheet me hi rehta hai, repo me lead data kabhi nahi jata, logs me
+sirf counts aate hain, lead names ya websites nahi.
 """
-import argparse, csv, os, re, urllib.parse, urllib.request
+import argparse
+import datetime
+import os
+import re
+import urllib.parse
+import urllib.request
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CAPTCHA_WORDS = ["recaptcha", "g-recaptcha", "turnstile", "hcaptcha", "captcha"]
 SKIP_DOMAINS = ["facebook.com", "instagram.com", "linkedin.com", "twitter.com",
                 "x.com", "youtube.com", "clutch.co", "upwork.com", "fiverr.com"]
+WEBSITE_FIGMA = "https://www.figma.com/design/9LfCw6faDaXvFQfWSFkM2C/Website-Portfolio--Client-Sharing-?node-id=159-12849&t=u2nBTJ3IEOLMJnQh-1"
+DASHBOARD_FIGMA = "https://www.figma.com/design/4OzS8KcSeOLgXVbGMjCVZ1/Dashboard-Portfolio--Client-Sharing-?node-id=1-15548&t=YUB9pL13pk5InsaD-1"
 
 
 def fetch(url):
@@ -55,18 +61,12 @@ def site_title_and_desc(html):
 
 
 def discover_from_queries(max_sites):
-    """Queries file se search karke nayi sites nikalna. Search engine ke
-    result page se sirf domain nikalte hain, koi personal data nahi."""
     queries_path = os.path.join(BASE, "config", "queries.txt")
     sites = []
     if not os.path.exists(queries_path):
         return sites
     with open(queries_path, encoding="utf-8") as f:
         queries = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-    # Har run me sirf pehli 3 queries, taake quota aur time dono bachen.
-    # Agli run me file ka order rotate karna workflow ka kaam nahi, is liye
-    # queries list ko run date se offset karte hain (simple, deterministic).
-    import datetime
     offset = datetime.date.today().toordinal() % max(1, len(queries))
     queries = queries[offset:] + queries[:offset]
     for line in queries[:3]:
@@ -86,41 +86,36 @@ def discover_from_queries(max_sites):
                     continue
                 site = f"https://{domain}"
                 if site not in [s["website"] for s in sites]:
-                    sites.append({"company": "", "website": site, "region": region,
-                                  "agency_size": "", "services": "", "source": "search:" + query,
-                                  "personalization_seed": ""})
+                    sites.append({"website": site, "region": region, "source": "search:" + query})
                 if len(sites) >= max_sites:
                     return sites
-        except Exception as e:
-            print(f"search failed: {query} {e}")
+        except Exception:
+            continue
     return sites
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--max-new", type=int, default=10)
+    ap.add_argument("--max-new", type=int, default=50)
     args = ap.parse_args()
-    # Tick har 10 minute par hai, lekin research har 10 minute par nahi.
-    # Sirf ghante ke pehle tick (minute 0-9) par research hoti hai, warna
-    # search engine ko har 10 minute par hit karna rate limit khayega.
-    import datetime as _dt
-    if _dt.datetime.now(_dt.timezone.utc).minute >= 10:
+    if datetime.datetime.now(datetime.timezone.utc).minute >= 10:
         print("research tick: not due this tick, research runs hourly")
         return
-    queue_path = os.path.join(BASE, "data", "queue.csv")
-    sent_path = os.path.join(BASE, "data", "sent.csv")
+    try:
+        import sheets
+        queue_rows = sheets.read_values("Queue!A:P")
+        sent_rows = sheets.read_values("Sent!A:H")
+    except Exception as e:
+        print(f"research tick: sheet unavailable, no research: {type(e).__name__}")
+        return
+    queue = sheets.rows_to_dicts(queue_rows)
+    sent = sheets.rows_to_dicts(sent_rows)
     seen = set()
-    for p in (queue_path, sent_path):
-        if os.path.exists(p):
-            with open(p, newline="", encoding="utf-8") as f:
-                for row in csv.DictReader(f):
-                    seen.add((row.get("company", "") + row.get("website", "")).lower())
-                    seen.add(row.get("website", "").lower())
+    for row in queue + sent:
+        seen.add((row.get("company", "").strip().lower(), row.get("website", "").strip().lower()))
+        seen.add(row.get("website", "").strip().lower())
+        seen.add(row.get("dedupe_key", "").strip().lower())
     seeds = discover_from_queries(args.max_new * 3)
-    seeds_path = os.path.join(BASE, "data", "seeds.csv")
-    if os.path.exists(seeds_path):
-        with open(seeds_path, newline="", encoding="utf-8") as f:
-            seeds += [r for r in csv.DictReader(f) if r.get("website")]
     rows_out = []
     for s in seeds:
         if len(rows_out) >= args.max_new:
@@ -134,32 +129,37 @@ def main():
             contact = find_contact(html, website)
             contact_html = fetch(contact) if contact != website else html
             if any(w in contact_html.lower() for w in CAPTCHA_WORDS):
-                print(f"SKIP captcha: {website}")
                 continue
-            line = (s.get("personalization_seed") or "").strip() or desc
+            line = desc
             if not line:
-                print(f"SKIP (no personalization from site): {website}")
                 continue
-            company = (s.get("company") or "").strip() or title.split("|")[0].split("-")[0].strip() or website
-            rows_out.append({
-                "company": company, "website": website,
-                "region": s.get("region", ""),
-                "contact_form_url": contact, "contact_email": "",
-                "channel": "form_only", "email_or_form": "form",
-                "personalization_line": line, "agency_size": s.get("agency_size", ""),
-                "services": s.get("services", ""), "source": s.get("source", ""),
-                "status": "researched", "approved": "0", "created_at": "", "notes": "",
-            })
-        except Exception as e:
-            print(f"SKIP (fetch failed): {website} {e}")
+            company = title.split("|")[0].split("-")[0].strip() or website
+            if (company.lower(), website.lower()) in seen:
+                continue
+            lower = (title + " " + desc).lower()
+            figma = DASHBOARD_FIGMA if any(w in lower for w in ["saas", "dashboard", "product"]) else WEBSITE_FIGMA
+            rows_out.append([
+                company, website, s.get("region", ""), contact, line, "",
+                "", s.get("source", ""), "queued", "yes",
+                datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "", "0", figma, "", website.lower(),
+            ])
+        except Exception:
+            continue
     if rows_out:
-        exists = os.path.exists(queue_path) and os.path.getsize(queue_path) > 0
-        with open(queue_path, "a", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows_out[0].keys()))
-            if not exists:
-                w.writeheader()
-            w.writerows(rows_out)
-    print(f"discovered_sites={len(seeds)} researched_new={len(rows_out)}")
+        try:
+            sheets.append_values("Queue!A:P", rows_out)
+        except Exception as e:
+            print(f"research tick: sheet append failed: {type(e).__name__}")
+            return
+    try:
+        sheets.append_values("Log!A:D", [[
+            datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "research", f"discovered={len(seeds)} queued={len(rows_out)}", len(rows_out),
+        ]])
+    except Exception:
+        pass
+    print(f"research tick done: discovered={len(seeds)} queued={len(rows_out)}")
 
 
 if __name__ == "__main__":
