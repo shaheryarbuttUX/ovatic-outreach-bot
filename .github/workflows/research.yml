@@ -6,12 +6,14 @@ on:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
       - name: Tick every 10 min, research only when due (see script guard)
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
