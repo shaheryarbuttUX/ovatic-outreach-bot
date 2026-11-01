@@ -35,6 +35,7 @@ WEBSITE_FIGMA = "https://www.figma.com/design/9LfCw6faDaXvFQfWSFkM2C/Website-Por
 DASHBOARD_FIGMA = "https://www.figma.com/design/4OzS8KcSeOLgXVbGMjCVZ1/Dashboard-Portfolio--Client-Sharing-?node-id=1-15548&t=YUB9pL13pk5InsaD-1"
 SENDER_NAME = "Shaheryar Butt"
 SENDER_EMAIL = "shaheryarbutt47@gmail.com"
+SENDER_PHONE = "+92 332 0512236"
 SUBJECT = "Freelance UI/UX designer for overflow work"
 CAPTCHA_WORDS = ["recaptcha", "g-recaptcha", "turnstile", "hcaptcha", "captcha"]
 SUCCESS_WORDS = [
@@ -114,11 +115,40 @@ def submit_one(page, form_url, company, personalization, figma):
                 if not el.is_visible():
                     continue
                 tag = el.evaluate("e => e.tagName.toLowerCase()")
-                if tag == "select":
-                    continue
-                if el.get_attribute("type") in ("submit", "checkbox", "radio", "hidden", "file"):
-                    continue
                 key = _field_key(el)
+                if tag == "select":
+                    # Many forms require a service/budget select; pick a
+                    # design/web/other option, never a marketing opt-in.
+                    try:
+                        options = el.locator("option")
+                        chosen = None
+                        for j in range(options.count()):
+                            opt = (options.nth(j).inner_text() or "").strip()
+                            low = opt.lower()
+                            if not opt or low in ("select", "choose", "please select"):
+                                continue
+                            if chosen is None:
+                                chosen = opt
+                            if any(w in low for w in ["design", "web", "other", "general"]):
+                                chosen = opt
+                                break
+                        if chosen:
+                            el.select_option(label=chosen)
+                            filled += 1
+                    except Exception:
+                        pass
+                    continue
+                if el.get_attribute("type") in ("submit", "radio", "hidden", "file"):
+                    continue
+                if el.get_attribute("type") == "checkbox":
+                    # Only privacy/terms consent, never newsletter opt-in.
+                    if any(w in key for w in ["privacy", "terms", "consent", "agree", "policy"]):
+                        try:
+                            el.check()
+                            filled += 1
+                        except Exception:
+                            pass
+                    continue
                 value = None
                 if "email" in key:
                     value = SENDER_EMAIL
@@ -126,6 +156,8 @@ def submit_one(page, form_url, company, personalization, figma):
                     value = SUBJECT
                 elif "message" in key or "comment" in key or "detail" in key or "project" in key or "inquiry" in key or "enquiry" in key:
                     value = message
+                elif "phone" in key or "tel" in key:
+                    value = SENDER_PHONE
                 elif "name" in key or "full" in key:
                     value = SENDER_NAME
                 elif "website" in key or "url" in key or "company" in key:
