@@ -1,0 +1,38 @@
+name: maps-research
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      max_queries:
+        description: 'Queries to process this run'
+        default: '20'
+concurrency:
+  group: maps-scrape
+  cancel-in-progress: false
+jobs:
+  maps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser and Sheet packages
+        run: pip install playwright google-api-python-client google-auth && python -m playwright install --with-deps chromium
+      - name: Scrape Google Maps, no API key, slow and resumable
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set +e
+          python scripts/maps_scrape.py --max-queries "${{ inputs.max_queries || '90' }}" --delay 4
+          code=$?
+          if [ $code -eq 3 ]; then
+            echo "Stopped early on a Google block - progress saved; the next run resumes."
+            exit 0
+          fi
+          exit $code
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "maps tick done, lead data lives in Google Sheet only, not in repo"
