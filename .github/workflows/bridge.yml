@@ -1,0 +1,23 @@
+name: bridge-directory-to-queue
+on:
+  schedule:
+    - cron: '15 * * * *'
+  workflow_dispatch:
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Pull Directory businesses into Queue, form and CAPTCHA checked
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/bridge.py --max-new 100
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "bridge tick done, lead data lives in Google Sheet only, not in repo"
