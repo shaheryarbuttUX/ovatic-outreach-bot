@@ -3,10 +3,13 @@ on:
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
+concurrency:
+  group: send-forms
+  cancel-in-progress: false
 jobs:
   send:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,8 +20,17 @@ jobs:
       - name: Tick every 10 min, send only when guards pass (see script)
         env:
           DRY_RUN: 'false'
+          SCREENSHOTS: 'true'
+          SCREENSHOT_DIR: 'screenshots'
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/send_form.py --max-send 10
+        run: python scripts/send_form.py --max-send 20
+      - name: Upload before/after screenshots for audit (7-day retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: send-screenshots-${{ github.run_id }}
+          path: screenshots/
+          retention-days: 7
       - name: Log count only, never lead names (public repo logs are public)
         run: echo "send tick done, lead data lives in Google Sheet only, not in repo"
