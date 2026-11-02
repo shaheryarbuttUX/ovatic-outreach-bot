@@ -81,18 +81,45 @@ def _field_key(el):
         placeholder = (el.get_attribute("placeholder") or "").lower()
         aria = (el.get_attribute("aria-label") or "").lower()
         typ = (el.get_attribute("type") or "").lower()
-        return f"{name} {ident} {placeholder} {aria} {typ}"
+        label = _label_text(el).lower()
+        return f"{name} {ident} {placeholder} {aria} {label} {typ}"
     except Exception:
         return ""
 
 
 def _shot(page, path):
-    """Screenshot, best effort only. A failed shot never blocks a send."""
+    """Screenshot, best effort only. A failed shot never blocks a send.
+
+    Full-page shots on pages with a very wide element render thousands
+    of pixels wide and unreadable (Omnia, 2026-11-02). If the page is
+    wider than a normal desktop viewport, fall back to a viewport shot
+    so the audit image stays readable.
+    """
     try:
-        page.screenshot(path=path, full_page=True)
+        try:
+            width = page.evaluate("() => document.documentElement.scrollWidth || 0")
+        except Exception:
+            width = 0
+        page.screenshot(path=path, full_page=(width <= 1920))
         return True
     except Exception:
         return False
+
+
+def _label_text(el):
+    """Text of the <label> / aria-labelledby for a field, if any."""
+    try:
+        return el.evaluate(
+            """(e) => {
+                let t = '';
+                if (e.labels) { t += Array.from(e.labels).map(l => l.innerText || '').join(' '); }
+                const by = e.getAttribute('aria-labelledby');
+                if (by) { by.split(' ').forEach(id => { const n = document.getElementById(id); if (n) t += ' ' + (n.innerText || ''); }); }
+                return t;
+            }"""
+        ) or ""
+    except Exception:
+        return ""
 
 
 def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
@@ -137,6 +164,7 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
         fields = form.locator("input, textarea, select")
         count = fields.count()
         filled = 0
+        select_blocked = False
         message = build_message(company, personalization, figma)
         for i in range(count):
             try:
@@ -146,24 +174,37 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                 tag = el.evaluate("e => e.tagName.toLowerCase()")
                 key = _field_key(el)
                 if tag == "select":
-                    # Many forms require a service/budget select; pick a
-                    # design/web/other option, never a marketing opt-in.
+                    # Honesty rule, 2026-11-02 (Idea Peddler lesson):
+                    # only an option that is honest for an outreach offer
+                    # may be chosen. A required select with no honest
+                    # option blocks the whole attempt instead of inventing
+                    # a client service need, budget, or referral source.
+                    # An optional select with no honest option is left
+                    # untouched.
+                    honest_words = ["design", "web", "other", "general",
+                                    "partnership", "inquiry", "enquiry",
+                                    "not sure", "unsure", "pakistan"]
                     try:
                         options = el.locator("option")
                         chosen = None
                         for j in range(options.count()):
                             opt = (options.nth(j).inner_text() or "").strip()
                             low = opt.lower()
-                            if not opt or low in ("select", "choose", "please select"):
+                            if not opt or low in ("select", "choose", "please select", "select an option"):
                                 continue
-                            if chosen is None:
-                                chosen = opt
-                            if any(w in low for w in ["design", "web", "other", "general"]):
+                            if any(w in low for w in honest_words):
                                 chosen = opt
                                 break
                         if chosen:
                             el.select_option(label=chosen)
                             filled += 1
+                        else:
+                            try:
+                                required = el.evaluate("e => !!e.required")
+                            except Exception:
+                                required = False
+                            if required:
+                                select_blocked = True
                     except Exception:
                         pass
                     continue
@@ -183,9 +224,9 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     value = SENDER_EMAIL
                 elif "subject" in key:
                     value = SUBJECT
-                elif "message" in key or "comment" in key or "detail" in key or "project" in key or "inquiry" in key or "enquiry" in key:
+                elif any(w in key for w in ["message", "comment", "detail", "project", "inquiry", "enquiry", "how can", "tell us", "about your", "brief", "requirement", "description", "help us", "what do you need"]):
                     value = message
-                elif "phone" in key or "tel" in key:
+                elif "phone" in key or "tel" in key or "mobile" in key or "cell" in key:
                     value = SENDER_PHONE
                 elif "name" in key or "full" in key:
                     value = SENDER_NAME
@@ -196,18 +237,23 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     filled += 1
             except Exception:
                 continue
+        if select_blocked:
+            if before_shot:
+                _shot(page, before_shot)
+            return "failed", "select_no_honest_option", before_shot, after_shot
         if filled < 2:
             if before_shot:
                 _shot(page, before_shot)
             return "failed", "not_enough_fields_filled", before_shot, after_shot
         if before_shot:
             _shot(page, before_shot)
-        submit = form.locator("button[type=submit], input[type=submit]")
-        if submit.count() > 0:
-            submit.first.click()
-        else:
+
+        def _click_submit():
+            submit = form.locator("button[type=submit], input[type=submit]")
+            if submit.count() > 0:
+                submit.first.click()
+                return True
             buttons = form.locator("button")
-            clicked = False
             for i in range(buttons.count()):
                 try:
                     text = (buttons.nth(i).inner_text() or "").lower()
@@ -215,26 +261,55 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     text = ""
                 if any(w in text for w in ["submit", "send", "contact us", "get in touch"]):
                     buttons.nth(i).click()
-                    clicked = True
-                    break
-            if not clicked:
-                return "failed", "no_submit_button", before_shot, after_shot
-        page.wait_for_timeout(8000)
+                    return True
+            return False
+
+        def _success_seen():
+            try:
+                after = page.content().lower()
+            except Exception:
+                after = ""
+            url = page.url.lower()
+            url_moved = "thank" in url or "success" in url
+            new_success = any(w in after and w not in before_content for w in SUCCESS_WORDS)
+            try:
+                form_gone = page.locator("form").count() == 0
+            except Exception:
+                form_gone = False
+            any_success = any(w in after for w in SUCCESS_WORDS)
+            return url_moved or new_success or (form_gone and any_success)
+
+        def _poll(seconds):
+            # Poll every 2s instead of one fixed 8s wait: AJAX toasts,
+            # modals and slow redirects arrive late or disappear fast.
+            for _ in range(max(1, seconds // 2)):
+                page.wait_for_timeout(2000)
+                if _success_seen():
+                    return True
+            return _success_seen()
+
+        if not _click_submit():
+            return "failed", "no_submit_button", before_shot, after_shot
+        ok = _poll(20)
+        if not ok:
+            # Arken lesson, 2026-11-02: a filled form can sit there
+            # untouched after one click. If the form is still present
+            # and nothing succeeded, click once more, then poll again.
+            # A form that really submitted is already gone, so this
+            # cannot double-submit a successful form.
+            try:
+                form_still = page.locator("form").count() > 0
+            except Exception:
+                form_still = False
+            if form_still:
+                try:
+                    _click_submit()
+                    ok = _poll(10)
+                except Exception:
+                    pass
         if after_shot:
             _shot(page, after_shot)
-        try:
-            after = page.content().lower()
-        except Exception:
-            after = ""
-        url = page.url.lower()
-        url_moved = "thank" in url or "success" in url
-        new_success = any(w in after and w not in before_content for w in SUCCESS_WORDS)
-        try:
-            form_gone = page.locator("form").count() == 0
-        except Exception:
-            form_gone = False
-        any_success = any(w in after for w in SUCCESS_WORDS)
-        if url_moved or new_success or (form_gone and any_success):
+        if ok:
             return "delivered", "success_response_seen", before_shot, after_shot
         return "failed", "no_success_response", before_shot, after_shot
     except PlaywrightTimeout:
