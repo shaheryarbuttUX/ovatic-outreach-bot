@@ -23,6 +23,7 @@ jobs:
           SCREENSHOTS: 'true'
           SCREENSHOT_DIR: 'screenshots'
           SHEET_ID: ${{ secrets.SHEET_ID }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: python scripts/send_form.py --max-send 40
       - name: Upload before/after screenshots for audit (7-day retention)
