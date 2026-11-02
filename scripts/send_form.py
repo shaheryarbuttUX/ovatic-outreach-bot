@@ -209,6 +209,10 @@ def _follow_contact_link(page):
 
 
 GROQ_MODEL = "llama-3.1-8b-instant"
+# Per-tick observability for the Groq mapper, so a missing or bad
+# key is visible in the Log instead of silently falling back to
+# keywords forever. Counters only, no lead data, no key material.
+GROQ_STATS = {"calls": 0, "mapped": 0, "failed": 0, "no_key": 0}
 LLM_ROLES = ("name_first", "name_last", "name_full", "email", "phone",
              "website", "company", "subject", "message", "referral", "ignore")
 
@@ -229,7 +233,10 @@ def _llm_map_fields(descriptors):
     import json as _json
     import urllib.request as _urlreq
     key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not key or not descriptors:
+    if not key:
+        GROQ_STATS["no_key"] += 1
+        return None
+    if not descriptors:
         return None
     prompt = (
         "Map each form field index to exactly one role. Roles: "
@@ -263,8 +270,14 @@ def _llm_map_fields(descriptors):
         for k, v in mapping.items():
             if v in LLM_ROLES:
                 clean[str(k)] = v
-        return clean or None
+        if clean:
+            GROQ_STATS["calls"] += 1
+            GROQ_STATS["mapped"] += len(clean)
+            return clean
+        GROQ_STATS["failed"] += 1
+        return None
     except Exception:
+        GROQ_STATS["failed"] += 1
         return None
 
 
@@ -766,7 +779,8 @@ def main():
             pass
     try:
         reasons = ",".join(f"{k}={v}" for k, v in sorted(reason_counts.items()))
-        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons}", delivered]])
+        groq = ",".join(f"{k}={v}" for k, v in sorted(GROQ_STATS.items()))
+        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons} groq:{groq}", delivered]])
     except Exception:
         pass
     print(f"send tick done: delivered={delivered} attempted={attempted} failed={failed} reasons={reason_counts}")
