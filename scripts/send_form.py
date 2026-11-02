@@ -208,6 +208,66 @@ def _follow_contact_link(page):
     return False
 
 
+GROQ_MODEL = "llama-3.1-8b-instant"
+LLM_ROLES = ("name_first", "name_last", "name_full", "email", "phone",
+             "website", "company", "subject", "message", "referral", "ignore")
+
+
+def _llm_map_fields(descriptors):
+    """Ask the free Groq Llama model to map unmapped form fields.
+
+    Only called for fields the keyword rules could not place, and only
+    with the fields' own labels (name, id, placeholder, label text).
+    No sender data, no message text, no personal data is sent: the
+    model only ever sees an empty form's labels, so there is nothing
+    private to leak. The answer is validated strictly: an unknown
+    role, a budget/service role, or malformed JSON is discarded and
+    the caller falls back to the keyword rules. A missing key, a
+    timeout, or a 429 also returns None, never an exception, so a
+    failed model call can never break a tick.
+    """
+    import json as _json
+    import urllib.request as _urlreq
+    key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not key or not descriptors:
+        return None
+    prompt = (
+        "Map each form field index to exactly one role. Roles: "
+        "name_first, name_last, name_full, email, phone, website, "
+        "company, subject, message, referral, ignore. A field asking "
+        "for budget, price, a service the visitor wants to buy, or a "
+        "project timeline as a client must be ignore, never message "
+        "or any other role. Reply with JSON only, like "
+        "{\"0\": \"email\", \"1\": \"message\"}. Fields: "
+        + _json.dumps(descriptors)[:3000]
+    )
+    body = _json.dumps({
+        "model": GROQ_MODEL,
+        "temperature": 0,
+        "max_tokens": 400,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode("utf-8")
+    try:
+        req = _urlreq.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=body, headers={"Authorization": f"Bearer {key}",
+                                "Content-Type": "application/json"})
+        with _urlreq.urlopen(req, timeout=15) as r:
+            resp = _json.loads(r.read().decode("utf-8", "ignore"))
+        text = resp["choices"][0]["message"]["content"]
+        start, end = text.find("{"), text.rfind("}")
+        mapping = _json.loads(text[start:end + 1]) if start >= 0 and end > start else None
+        if not isinstance(mapping, dict):
+            return None
+        clean = {}
+        for k, v in mapping.items():
+            if v in LLM_ROLES:
+                clean[str(k)] = v
+        return clean or None
+    except Exception:
+        return None
+
+
 def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
     """Returns (status, reason, before_shot, after_shot).
 
@@ -263,6 +323,9 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
         count = fields.count()
         filled = 0
         select_blocked = False
+        unmapped = []
+        email_filled = False
+        message_filled = False
         message = build_message(company, personalization, figma)
         for i in range(count):
             try:
@@ -368,12 +431,51 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                 if value:
                     el.fill(value)
                     filled += 1
+                    if value == SENDER_EMAIL:
+                        email_filled = True
+                    if value == message:
+                        message_filled = True
+                else:
+                    unmapped.append((i, el, key))
             except Exception:
                 continue
         if select_blocked:
             if before_shot:
                 _shot(page, before_shot)
             return "failed", "select_no_honest_option", before_shot, after_shot
+        # Groq mapper, second pass: only when a critical field is
+        # still missing (email or message) and keyword rules left
+        # fields unmapped. The model sees labels only, its answer is
+        # validated against LLM_ROLES, and budget/service fields are
+        # forced to ignore, so it can fix DE/NL and unusual labels
+        # without ever inventing a value. Any model failure simply
+        # leaves the attempt on the keyword result.
+        if (not email_filled or not message_filled) and unmapped:
+            descriptors = []
+            for idx, _el, key in unmapped[:12]:
+                descriptors.append({"index": str(idx), "label": key[:150]})
+            mapping = _llm_map_fields(descriptors)
+            if mapping:
+                role_values = {
+                    "name_first": "Shaheryar", "name_last": "Butt",
+                    "name_full": SENDER_NAME, "email": SENDER_EMAIL,
+                    "phone": SENDER_PHONE,
+                    "website": "https://www.behance.net/sherybutt",
+                    "company": "Freelance", "subject": SUBJECT,
+                    "message": message, "referral": "Google Maps",
+                }
+                for idx, el, _key in unmapped:
+                    role = mapping.get(str(idx))
+                    if role in role_values:
+                        try:
+                            el.fill(role_values[role])
+                            filled += 1
+                            if role == "email":
+                                email_filled = True
+                            if role == "message":
+                                message_filled = True
+                        except Exception:
+                            continue
         if filled < 2:
             if before_shot:
                 _shot(page, before_shot)
