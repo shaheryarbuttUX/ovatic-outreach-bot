@@ -212,7 +212,9 @@ GROQ_MODEL = "llama-3.1-8b-instant"
 # Per-tick observability for the Groq mapper, so a missing or bad
 # key is visible in the Log instead of silently falling back to
 # keywords forever. Counters only, no lead data, no key material.
-GROQ_STATS = {"calls": 0, "mapped": 0, "failed": 0, "no_key": 0}
+GROQ_STATS = {"calls": 0, "mapped": 0, "failed": 0, "no_key": 0,
+               "fail_auth": 0, "fail_model": 0, "fail_rate": 0,
+               "fail_net": 0, "fail_empty": 0, "fail_parse": 0}
 LLM_ROLES = ("name_first", "name_last", "name_full", "email", "phone",
              "website", "company", "subject", "message", "referral", "ignore")
 
@@ -265,6 +267,8 @@ def _llm_map_fields(descriptors):
         start, end = text.find("{"), text.rfind("}")
         mapping = _json.loads(text[start:end + 1]) if start >= 0 and end > start else None
         if not isinstance(mapping, dict):
+            GROQ_STATS["failed"] += 1
+            GROQ_STATS["fail_parse"] += 1
             return None
         clean = {}
         for k, v in mapping.items():
@@ -275,9 +279,24 @@ def _llm_map_fields(descriptors):
             GROQ_STATS["mapped"] += len(clean)
             return clean
         GROQ_STATS["failed"] += 1
+        GROQ_STATS["fail_empty"] += 1
         return None
-    except Exception:
+    except Exception as e:
+        # Diagnose only: record WHY the call failed (auth, model,
+        # rate limit, network, or bad output) so the next tick's Log
+        # line names the cause. The key itself is never logged.
         GROQ_STATS["failed"] += 1
+        code = getattr(e, "code", None)
+        if code in (401, 403):
+            GROQ_STATS["fail_auth"] += 1
+        elif code == 404:
+            GROQ_STATS["fail_model"] += 1
+        elif code == 429:
+            GROQ_STATS["fail_rate"] += 1
+        elif isinstance(e, (KeyError, ValueError)):
+            GROQ_STATS["fail_parse"] += 1
+        else:
+            GROQ_STATS["fail_net"] += 1
         return None
 
 
@@ -355,9 +374,10 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     # a client service need, budget, or referral source.
                     # An optional select with no honest option is left
                     # untouched.
-                    honest_words = ["design", "web", "other", "general",
-                                    "partnership", "inquiry", "enquiry",
-                                    "not sure", "unsure", "pakistan"]
+                    honest_words = ["other", "general",
+                                    "partnership", "collaboration",
+                                    "inquiry", "enquiry",
+                                    "not sure", "unsure", "else", "pakistan"]
                     try:
                         options = el.locator("option")
                         chosen = None
@@ -388,17 +408,38 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     # Only privacy/terms consent, never newsletter
                     # opt-in and never a service checkbox. German and
                     # Dutch consent labels included (Babylon, 2026-11-02:
-                    # its Datenschutzerklarung box stayed unchecked).
+                    # its Datenschutzerklarung box stayed unchecked;
+                    # Wiedermayer, run #53: 'Verwendung meiner Daten'
+                    # needed 'verwendung'/'akzeptier' to match).
                     if "newsletter" in key or "marketing" in key:
                         continue
                     if any(w in key for w in ["privacy", "terms", "consent", "agree", "policy",
                                               "datenschutz", "einwilligung", "toestemming",
-                                              "akkoord", "voorwaarden"]):
+                                              "akkoord", "voorwaarden", "akzeptier",
+                                              "einverstanden", "zustimmung", "verwendung",
+                                              "datenverarbeitung", "datenerhebung"]):
                         try:
-                            el.check()
-                            filled += 1
+                            # Styled checkboxes often hide the input, so
+                            # a plain check() silently fails (GoldenWing,
+                            # run #53: value stayed undefined). Fall back
+                            # to clicking the label, and only count the
+                            # field when it is actually checked.
+                            if not el.is_checked():
+                                try:
+                                    el.check()
+                                except Exception:
+                                    el.evaluate("(e) => { const l = e.labels && e.labels[0]; if (l) l.click(); else e.click(); }")
+                            if el.is_checked():
+                                filled += 1
                         except Exception:
                             pass
+                    continue
+                # Budget/price fields are never filled: any value here
+                # would be a client money claim (run #53, Tampa Latest:
+                # the phone number landed in the 'Your Budget' field).
+                # A required budget field left empty fails honestly at
+                # submit validation instead of inventing a budget.
+                if any(w in key for w in ["budget", "preis", "price", "kosten"]):
                     continue
                 value = None
                 # Name first/last split: a field asking for first name
@@ -431,15 +472,16 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     # through Google Maps research. Never invent a person
                     # or a channel that did not happen.
                     value = "Google Maps"
-                elif "name" in key or "naam" in key or "full" in key:
+                elif ("name" in key or "naam" in key or "full" in key) and "business" not in key and "company" not in key and "bedrijf" not in key and "unternehmen" not in key and "firma" not in key:
                     value = name_value
                 elif "website" in key or "url" in key or "webseite" in key:
                     value = "https://www.behance.net/sherybutt"
-                elif "company" in key or "bedrijf" in key or "unternehmen" in key or "firma" in key:
-                    # A company field must not carry a URL. The pilot
-                    # identity is an individual freelancer, so the
-                    # honest company value is Freelance, and Behance
-                    # belongs in the website field only.
+                elif "company" in key or "business" in key or "bedrijf" in key or "unternehmen" in key or "firma" in key:
+                    # 'Business Name' fields hit the name rule before
+                    # this one (run #53: OnlyaClick, Dominate carried
+                    # the full name instead of Freelance). The guard on
+                    # the name branch above keeps business/company
+                    # fields out of it, so they land here.
                     value = "Freelance"
                 if value:
                     el.fill(value)
