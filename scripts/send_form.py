@@ -86,24 +86,53 @@ def _field_key(el):
         return ""
 
 
-def submit_one(page, form_url, company, personalization, figma):
-    """Returns (status, reason). status is delivered or failed."""
+def _shot(page, path):
+    """Screenshot, best effort only. A failed shot never blocks a send."""
+    try:
+        page.screenshot(path=path, full_page=True)
+        return True
+    except Exception:
+        return False
+
+
+def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
+    """Returns (status, reason, before_shot, after_shot).
+
+    Success check, tightened 2026-11-02 after the Idea Peddler doubt:
+    the old check counted any success word anywhere on the page AFTER
+    submit, even if that word was already on the page BEFORE submit
+    (footer, testimonials, etc.), which can fake a delivered. Now a
+    delivered needs one of: URL moved to thank/success, a success word
+    that is NEW after submit, or the form itself disappearing after
+    submit while a success word is present. Screenshots before and
+    after submit are the audit proof for every attempt.
+    """
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
+    before_shot = ""
+    after_shot = ""
+    if shot_prefix:
+        before_shot = f"{shot_prefix}-before.png"
+        after_shot = f"{shot_prefix}-after.png"
     try:
         page.goto(form_url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
-        return "failed", f"page_load_failed:{type(e).__name__}"
+        return "failed", f"page_load_failed:{type(e).__name__}", before_shot, after_shot
     try:
         content = page.content().lower()
     except Exception:
         content = ""
     if any(w in content for w in CAPTCHA_WORDS):
-        return "failed", "captcha_present"
+        if before_shot:
+            _shot(page, before_shot)
+        return "failed", "captcha_present", before_shot, after_shot
+    before_content = content
     try:
         forms = page.locator("form")
         if forms.count() == 0:
-            return "failed", "no_form_found"
+            if before_shot:
+                _shot(page, before_shot)
+            return "failed", "no_form_found", before_shot, after_shot
         form = forms.first
         fields = form.locator("input, textarea, select")
         count = fields.count()
@@ -168,7 +197,11 @@ def submit_one(page, form_url, company, personalization, figma):
             except Exception:
                 continue
         if filled < 2:
-            return "failed", "not_enough_fields_filled"
+            if before_shot:
+                _shot(page, before_shot)
+            return "failed", "not_enough_fields_filled", before_shot, after_shot
+        if before_shot:
+            _shot(page, before_shot)
         submit = form.locator("button[type=submit], input[type=submit]")
         if submit.count() > 0:
             submit.first.click()
@@ -185,20 +218,34 @@ def submit_one(page, form_url, company, personalization, figma):
                     clicked = True
                     break
             if not clicked:
-                return "failed", "no_submit_button"
+                return "failed", "no_submit_button", before_shot, after_shot
         page.wait_for_timeout(8000)
+        if after_shot:
+            _shot(page, after_shot)
         try:
             after = page.content().lower()
         except Exception:
             after = ""
         url = page.url.lower()
-        if any(w in after for w in SUCCESS_WORDS) or "thank" in url or "success" in url:
-            return "delivered", "success_response_seen"
-        return "failed", "no_success_response"
+        url_moved = "thank" in url or "success" in url
+        new_success = any(w in after and w not in before_content for w in SUCCESS_WORDS)
+        try:
+            form_gone = page.locator("form").count() == 0
+        except Exception:
+            form_gone = False
+        any_success = any(w in after for w in SUCCESS_WORDS)
+        if url_moved or new_success or (form_gone and any_success):
+            return "delivered", "success_response_seen", before_shot, after_shot
+        return "failed", "no_success_response", before_shot, after_shot
     except PlaywrightTimeout:
-        return "failed", "timeout"
+        if after_shot:
+            try:
+                _shot(page, after_shot)
+            except Exception:
+                pass
+        return "failed", "timeout", before_shot, after_shot
     except Exception as e:
-        return "failed", f"submit_error:{type(e).__name__}"
+        return "failed", f"submit_error:{type(e).__name__}", before_shot, after_shot
 
 
 def main():
@@ -259,6 +306,23 @@ def main():
     attempted = 0
     delivered = 0
     failed = 0
+    # Screenshot audit, user order 2026-11-02: one week of before/after
+    # proof per attempt, stored as run artifacts (7-day retention) and
+    # indexed in the Sheet Screenshots tab so any delivered claim can
+    # be checked later against its own after-screenshot.
+    shots_enabled = os.environ.get("SCREENSHOTS", "true").lower() != "false"
+    shot_dir = os.environ.get("SCREENSHOT_DIR", "screenshots")
+    run_id = os.environ.get("GITHUB_RUN_ID", now.strftime("%Y%m%d%H%M%S"))
+    if shots_enabled:
+        try:
+            os.makedirs(shot_dir, exist_ok=True)
+        except Exception:
+            shots_enabled = False
+    if shots_enabled:
+        try:
+            sheets.ensure_tab("Screenshots", ["run_id", "attempted_at_utc", "company", "website", "status", "reason", "before_file", "after_file"])
+        except Exception:
+            pass
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
         page = browser.new_page()
@@ -268,12 +332,25 @@ def main():
             if attempted >= args.max_send:
                 break
             attempted += 1
-            status, reason = submit_one(
+            slug = re.sub(r"[^a-z0-9]+", "-", (row.get("company", "") or "lead").strip().lower()).strip("-")[:40] or "lead"
+            shot_prefix = os.path.join(shot_dir, f"{attempted:02d}-{slug}") if shots_enabled else ""
+            status, reason, before_shot, after_shot = submit_one(
                 page, row.get("contact_form_url", "").strip(),
                 row.get("company", "").strip(),
                 row.get("personalization_line", "").strip(),
                 row.get("figma_link", "").strip() or WEBSITE_FIGMA,
+                shot_prefix=shot_prefix,
             )
+            if shots_enabled:
+                try:
+                    sheets.append_values("Screenshots!A:H", [[
+                        run_id, now.isoformat(), row.get("company", ""), row.get("website", ""),
+                        status, reason,
+                        os.path.basename(before_shot) if before_shot else "",
+                        os.path.basename(after_shot) if after_shot else "",
+                    ]])
+                except Exception:
+                    pass
             try:
                 if status == "delivered":
                     delivered += 1
@@ -304,6 +381,13 @@ def main():
             if attempted < args.max_send:
                 time.sleep(20)
         browser.close()
+    if shots_enabled:
+        try:
+            if not os.listdir(shot_dir):
+                with open(os.path.join(shot_dir, "README.txt"), "w") as f:
+                    f.write("No send attempts in this tick.\n")
+        except Exception:
+            pass
     try:
         sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered}", delivered]])
     except Exception:

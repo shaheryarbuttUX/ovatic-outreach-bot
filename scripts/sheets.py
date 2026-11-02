@@ -57,6 +57,23 @@ def update_row(tab, row_number, values):
     ).execute()
 
 
+def ensure_tab(title, headers):
+    """Create tab with headers if missing. No-op if it already exists."""
+    service, sheet_id = _client()
+    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    existing = [s.get("properties", {}).get("title") for s in meta.get("sheets", [])]
+    if title in existing:
+        return
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=sheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": title}}}]}
+    ).execute()
+    service.spreadsheets().values().update(
+        spreadsheetId=sheet_id, range=f"{title}!A1",
+        valueInputOption="USER_ENTERED", body={"values": [headers]}
+    ).execute()
+
+
 def rows_to_dicts(rows):
     if not rows:
         return []
