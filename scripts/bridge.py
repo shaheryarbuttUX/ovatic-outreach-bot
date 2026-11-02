@@ -57,8 +57,32 @@ def site_text(html):
     return title, desc, h1
 
 
+def has_real_contact_form(low):
+    """A real contact form, not a search box or newsletter signup.
+
+    A form block must carry an email field AND a message field
+    (textarea, or an input named for a message). Pages whose only form
+    is a newsletter signup, a search box, or a button that opens a
+    modal are not queued: the send tick cannot fill them, and queueing
+    them only burns attempts and drags the delivered ratio down.
+    German/Dutch field names are included, because most of the 2026-11-02
+    failures were DE/NL forms queued on an English-only check.
+    """
+    for block in re.findall(r"<form.*?</form>", low, re.I | re.S):
+        if "newsletter" in block and "<textarea" not in block:
+            continue
+        has_email = ("type=\"email\"" in block or "type='email'" in block
+                     or "e-mail" in block or "email" in block)
+        has_message = ("<textarea" in block or "message" in block
+                       or "nachricht" in block or "bericht" in block
+                       or "comment" in block)
+        if has_email and has_message:
+            return True
+    return False
+
+
 def find_contact(html, base):
-    for m in re.finditer(r'href="([^"]*(contact|get-in-touch|lets-talk)[^"]*)"', html, re.I):
+    for m in re.finditer(r'href="([^"]*(contact|kontakt|contactformulier|neem-contact|get-in-touch|lets-talk)[^"]*)"', html, re.I):
         link = m.group(1)
         if link.startswith("http"):
             return link
@@ -155,8 +179,8 @@ def main():
             pulled_keys.add(place_key)
             skipped += 1
             continue
-        if "<form" not in low:
-            pulled_rows.append([place_key, now.isoformat(), "no_form"])
+        if not has_real_contact_form(low):
+            pulled_rows.append([place_key, now.isoformat(), "no_contact_form"])
             pulled_keys.add(place_key)
             skipped += 1
             continue

@@ -40,10 +40,24 @@ SUBJECT = "Freelance UI/UX designer for overflow work"
 CAPTCHA_WORDS = ["recaptcha", "g-recaptcha", "turnstile", "hcaptcha", "captcha"]
 SUCCESS_WORDS = [
     "thank you", "thanks for", "message sent", "form submitted",
-    "we will get back", "we'll be in touch", "we will be in touch",
-    "successfully submitted", "your message has been received",
+    "we will get back", "we'll get back", "we'll be in touch",
+    "we will be in touch", "we will contact you soon",
+    "successfully submitted", "successfully sent",
+    "your message has been received", "message received",
     "we have received",
 ]
+# A page that says the visitor was blocked is not a form page at all.
+# It must be reported as bot_blocked, never as no_form_found or
+# captcha_present, so the self-management skip below can learn it.
+BOT_BLOCK_PHRASES = [
+    "automated browsers", "request blocked", "have been blocked",
+    "blocked by our security", "sorry, you have been blocked",
+    "automated tool",
+]
+# Money ranges on a preselected radio mean the submission would carry
+# a client budget claim. That is a factual claim about money and must
+# never be sent for an outreach offer (Idea Peddler lesson).
+MONEY_RE = re.compile(r"\d[\d.,]*\s*[€$£]|[€$£]\s*\d")
 BODY_TEMPLATE = (
     "Hi {company} team,\n\n"
     "{personalization}\n\n"
@@ -122,6 +136,78 @@ def _label_text(el):
         return ""
 
 
+ACCEPT_TEXTS = {
+    "accept all", "accept", "akzeptieren", "alle akzeptieren",
+    "accepteren", "alles accepteren", "allow all", "agree",
+    "zustimmen", "einverstanden", "ok", "got it",
+}
+
+
+def _dismiss_cookie_banner(page):
+    """Click a cookie-consent accept button, if one is showing.
+
+    EU sites in the 2026-11-02 audit (Achso, Anne Grabs, Corinna,
+    Digitaleffects, Babylon, &why) keep the form behind a consent
+    modal or banner. A human visitor accepts or dismisses it before
+    using the page; doing the same is ordinary page interaction, not
+    a safeguard bypass. Only buttons OUTSIDE a form are considered,
+    so a form's own submit button is never clicked here.
+    """
+    try:
+        buttons = page.locator("button, [role=button]")
+        for i in range(buttons.count()):
+            try:
+                el = buttons.nth(i)
+                if not el.is_visible():
+                    continue
+                inside_form = el.evaluate(
+                    "e => !!e.closest('form')")
+                if inside_form:
+                    continue
+                text = (el.inner_text() or "").strip().lower()
+                if text in ACCEPT_TEXTS:
+                    el.click()
+                    page.wait_for_timeout(800)
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def _follow_contact_link(page):
+    """Follow one same-site contact link, or False if there is none."""
+    try:
+        base = page.url.split("/")[2] if "://" in page.url else ""
+    except Exception:
+        base = ""
+    try:
+        links = page.locator("a[href]")
+        for i in range(links.count()):
+            try:
+                el = links.nth(i)
+                if not el.is_visible():
+                    continue
+                href = (el.get_attribute("href") or "").lower()
+                text = (el.inner_text() or "").lower()
+                if not any(w in href or w in text for w in
+                           ["contact", "kontakt", "contactformulier"]):
+                    continue
+                if href.startswith("http") and base and base not in href:
+                    continue
+                if href.startswith("mailto:") or href.startswith("tel:"):
+                    continue
+                el.click()
+                page.wait_for_timeout(3000)
+                return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
 def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
     """Returns (status, reason, before_shot, after_shot).
 
@@ -145,10 +231,15 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
         page.goto(form_url, timeout=30000, wait_until="domcontentloaded")
     except Exception as e:
         return "failed", f"page_load_failed:{type(e).__name__}", before_shot, after_shot
+    _dismiss_cookie_banner(page)
     try:
         content = page.content().lower()
     except Exception:
         content = ""
+    if any(w in content for w in BOT_BLOCK_PHRASES):
+        if before_shot:
+            _shot(page, before_shot)
+        return "failed", "bot_blocked", before_shot, after_shot
     if any(w in content for w in CAPTCHA_WORDS):
         if before_shot:
             _shot(page, before_shot)
@@ -156,6 +247,13 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
     before_content = content
     try:
         forms = page.locator("form")
+        if forms.count() == 0:
+            # The Queue URL is often a homepage whose form lives on a
+            # contact subpage (EAZEE, Offff, 2026-11-02). Follow one
+            # same-site contact link and look again before giving up.
+            if _follow_contact_link(page):
+                _dismiss_cookie_banner(page)
+                forms = page.locator("form")
         if forms.count() == 0:
             if before_shot:
                 _shot(page, before_shot)
@@ -211,8 +309,15 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                 if el.get_attribute("type") in ("submit", "radio", "hidden", "file"):
                     continue
                 if el.get_attribute("type") == "checkbox":
-                    # Only privacy/terms consent, never newsletter opt-in.
-                    if any(w in key for w in ["privacy", "terms", "consent", "agree", "policy"]):
+                    # Only privacy/terms consent, never newsletter
+                    # opt-in and never a service checkbox. German and
+                    # Dutch consent labels included (Babylon, 2026-11-02:
+                    # its Datenschutzerklarung box stayed unchecked).
+                    if "newsletter" in key or "marketing" in key:
+                        continue
+                    if any(w in key for w in ["privacy", "terms", "consent", "agree", "policy",
+                                              "datenschutz", "einwilligung", "toestemming",
+                                              "akkoord", "voorwaarden"]):
                         try:
                             el.check()
                             filled += 1
@@ -220,18 +325,46 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                             pass
                     continue
                 value = None
-                if "email" in key:
+                # Name first/last split: a field asking for first name
+                # gets only the first name, last name only the last.
+                # A field asking for both (Style Marketing's "Voornaam
+                # en achternaam") gets the full name. The old code put
+                # the full name in both fields, which reads as careless.
+                both_names = (("voornaam" in key and "achternaam" in key)
+                              or ("first" in key and "last" in key)
+                              or ("vorname" in key and "nachname" in key))
+                if both_names or "full name" in key:
+                    name_value = SENDER_NAME
+                elif any(w in key for w in ["first", "voornaam", "vorname"]):
+                    name_value = "Shaheryar"
+                elif any(w in key for w in ["last", "achternaam", "nachname", "surname", "family"]):
+                    name_value = "Butt"
+                else:
+                    name_value = SENDER_NAME
+                if "email" in key or "e-mail" in key or "mailadres" in key:
                     value = SENDER_EMAIL
-                elif "subject" in key:
+                elif "subject" in key or "thema" in key or "betreff" in key or "onderwerp" in key:
                     value = SUBJECT
-                elif any(w in key for w in ["message", "comment", "detail", "project", "inquiry", "enquiry", "how can", "tell us", "about your", "brief", "requirement", "description", "help us", "what do you need"]):
+                elif any(w in key for w in ["message", "comment", "detail", "project", "inquiry", "enquiry", "how can", "tell us", "about your", "brief", "requirement", "description", "help us", "what do you need",
+                                            "bericht", "nachricht", "anfrage", "beschreibung"]):
                     value = message
                 elif "phone" in key or "tel" in key or "mobile" in key or "cell" in key:
                     value = SENDER_PHONE
-                elif "name" in key or "full" in key:
-                    value = SENDER_NAME
-                elif "website" in key or "url" in key or "company" in key:
+                elif any(w in key for w in ["hear about", "how did you find", "found us", "waar heb", "wie sind sie"]):
+                    # Honest referral source: every pilot lead was found
+                    # through Google Maps research. Never invent a person
+                    # or a channel that did not happen.
+                    value = "Google Maps"
+                elif "name" in key or "naam" in key or "full" in key:
+                    value = name_value
+                elif "website" in key or "url" in key or "webseite" in key:
                     value = "https://www.behance.net/sherybutt"
+                elif "company" in key or "bedrijf" in key or "unternehmen" in key or "firma" in key:
+                    # A company field must not carry a URL. The pilot
+                    # identity is an individual freelancer, so the
+                    # honest company value is Freelance, and Behance
+                    # belongs in the website field only.
+                    value = "Freelance"
                 if value:
                     el.fill(value)
                     filled += 1
@@ -245,6 +378,53 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
             if before_shot:
                 _shot(page, before_shot)
             return "failed", "not_enough_fields_filled", before_shot, after_shot
+        # Preselected money radio = a client budget claim. Submitting
+        # with it would present Shaheryar as a client with that budget.
+        # That is the Idea Peddler failure in radio form, so it blocks
+        # the attempt instead of sending a misleading form.
+        try:
+            radios = form.locator("input[type=radio]:checked")
+            for i in range(radios.count()):
+                try:
+                    rkey = _field_key(radios.nth(i))
+                    rlabel = radios.nth(i).evaluate(
+                        "(e) => { const l = e.labels ? Array.from(e.labels).map(x => x.innerText || '').join(' ') : ''; return l + ' ' + (e.value || ''); }")
+                    if MONEY_RE.search(rkey) or MONEY_RE.search(rlabel or ""):
+                        if before_shot:
+                            _shot(page, before_shot)
+                        return "failed", "client_budget_preselected", before_shot, after_shot
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        # Pill / button choice groups (Influentials "What are you
+        # looking for?", &why "I'm interested in"): the old code only
+        # handled <select>, so a required pill group blocked the form
+        # at validation. Click one honest pill only, partnership or
+        # other first, then a design pill. A pill naming a client
+        # service or a budget is never clicked.
+        try:
+            pill_buttons = form.locator("button:not([type=submit]), [role=button]")
+            for wanted in ("partnership", "other", "general", "inquiry", "enquiry",
+                           "ux design", "web development", "web design"):
+                clicked = False
+                for i in range(pill_buttons.count()):
+                    try:
+                        el = pill_buttons.nth(i)
+                        if not el.is_visible():
+                            continue
+                        text = (el.inner_text() or "").strip().lower()
+                        if wanted in text:
+                            el.click()
+                            page.wait_for_timeout(500)
+                            clicked = True
+                            break
+                    except Exception:
+                        continue
+                if clicked:
+                    break
+        except Exception:
+            pass
         if before_shot:
             _shot(page, before_shot)
 
@@ -349,8 +529,25 @@ def main():
     if delivered_today >= 500:
         print(f"send tick: success target reached today delivered={delivered_today}")
         return
+    # Self-management, rule-based and free: a domain blocked as an
+    # automated visitor twice is skipped by later ticks, so attempts
+    # stop burning on sites that will never accept the form. The
+    # Screenshots tab is the record, so no new storage is needed.
+    bot_blocked_domains = {}
+    try:
+        shot_rows = sheets.rows_to_dicts(sheets.read_values("Screenshots!A1:H2000"))
+        for r in shot_rows:
+            if (r.get("reason", "") or "").strip() == "bot_blocked":
+                w = (r.get("website", "") or "").strip().lower()
+                if w:
+                    bot_blocked_domains[w] = bot_blocked_domains.get(w, 0) + 1
+    except Exception:
+        bot_blocked_domains = {}
+    blocked_set = {w for w, c in bot_blocked_domains.items() if c >= 2}
     sendable = []
     for row in queue:
+        if (row.get("website", "") or "").strip().lower() in blocked_set:
+            continue
         status = (row.get("status", "") or "").strip().lower()
         approved = (row.get("approved", "") or "").strip().lower()
         if status not in ("queued", "approved", "researched"):
@@ -381,6 +578,7 @@ def main():
     attempted = 0
     delivered = 0
     failed = 0
+    reason_counts = {}
     # Screenshot audit, user order 2026-11-02: one week of before/after
     # proof per attempt, stored as run artifacts (7-day retention) and
     # indexed in the Sheet Screenshots tab so any delivered claim can
@@ -416,6 +614,7 @@ def main():
                 row.get("figma_link", "").strip() or WEBSITE_FIGMA,
                 shot_prefix=shot_prefix,
             )
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
             if shots_enabled:
                 try:
                     sheets.append_values("Screenshots!A:H", [[
@@ -464,10 +663,11 @@ def main():
         except Exception:
             pass
     try:
-        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered}", delivered]])
+        reasons = ",".join(f"{k}={v}" for k, v in sorted(reason_counts.items()))
+        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons}", delivered]])
     except Exception:
         pass
-    print(f"send tick done: delivered={delivered} attempted={attempted} failed={failed}")
+    print(f"send tick done: delivered={delivered} attempted={attempted} failed={failed} reasons={reason_counts}")
 
 
 if __name__ == "__main__":
