@@ -166,7 +166,10 @@ def scrape_query(page, query, delay, max_results):
     if not feed.count():
         if page.locator("h1").count():
             found[page.url] = ""
-        return list(found.items())[:max_results]
+        # No feed means no parseable business records. Returning the
+        # (url, text) tuples here used to crash main(), which expects
+        # dict records (run #15, 2026-11-03: TypeError after 4h24m).
+        return []
     last_count, stale = -1, 0
     while len(found) < max_results and stale < 3:
         cards = page.locator('div[role="feed"] a[href*="/maps/place/"]')
@@ -303,6 +306,11 @@ def main():
                 continue
             new_rows = []
             for rec in records:
+                # Defensive: skip any record that is not a dict, so a
+                # shape change upstream can never crash the whole run
+                # again (run #15 lesson, 2026-11-03).
+                if not isinstance(rec, dict):
+                    continue
                 key = (rec["place_key"] or "").strip().lower()
                 if not key or key in known:
                     continue
