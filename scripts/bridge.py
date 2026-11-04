@@ -17,6 +17,7 @@ Counts only in logs, never lead names or websites.
 
 import argparse
 import datetime
+import hashlib
 import os
 import re
 import urllib.parse
@@ -100,6 +101,15 @@ def domain_of(url):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-new", type=int, default=100)
+    # Parallel shards (2026-11-04): partitioned by DOMAIN hash (md5,
+    # deterministic across processes), not by row number, so the same
+    # domain can never land in two shards and be queued twice. A row
+    # for another shard is skipped WITHOUT being marked pulled.
+    # The chain step in bridge.yml dispatches the next run when this
+    # run queued > 0 (file bridge_queued.txt); the schedule stays
+    # as backstop.
+    ap.add_argument("--shard", type=int, default=0)
+    ap.add_argument("--shards", type=int, default=1)
     args = ap.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
     try:
@@ -175,6 +185,8 @@ def main():
             pulled_keys.add(place_key)
             skipped += 1
             continue
+        if args.shards > 1 and int(hashlib.md5(domain.encode()).hexdigest(), 16) % args.shards != args.shard:
+            continue
         base = f"https://{domain}"
         try:
             home = fetch(base)
@@ -232,10 +244,19 @@ def main():
     _flush()
     try:
         sheets.append_values("Log!A:D", [[now.isoformat(), "bridge",
-            f"queued={queued} skipped={skipped} errors={errors}", queued]])
+            f"shard={args.shard}/{args.shards} queued={queued} skipped={skipped} errors={errors}", queued]])
     except Exception:
         pass
-    print(f"bridge tick done: queued={queued} skipped={skipped} errors={errors}")
+    # Chaining file (2026-11-04): the workflow's chain step (shard 0
+    # only, so one dispatch per run, never one per shard) reads this
+    # and dispatches the next bridge run only when this run queued
+    # > 0. A missing file means no chain; the schedule stays backstop.
+    try:
+        with open("bridge_queued.txt", "w") as fh:
+            fh.write(str(queued))
+    except Exception:
+        pass
+    print(f"bridge tick done: shard={args.shard}/{args.shards} queued={queued} skipped={skipped} errors={errors}")
 
 
 if __name__ == "__main__":

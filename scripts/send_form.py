@@ -817,6 +817,11 @@ def main():
             sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"dry_run sendable={len(sendable)} delivered_today={delivered_today}", len(sendable)]])
         except Exception:
             pass
+        try:
+            with open("tick_attempted.txt", "w") as fh:
+                fh.write("0")
+        except Exception:
+            pass
         print("send tick: dry-run only, live sends=0")
         return
     try:
@@ -915,6 +920,15 @@ def main():
         reasons = ",".join(f"{k}={v}" for k, v in sorted(reason_counts.items()))
         groq = ",".join(f"{k}={v}" for k, v in sorted(GROQ_STATS.items()))
         sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"shard={args.shard}/{args.shards} delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons} groq:{groq}", delivered]])
+    except Exception:
+        pass
+    # Chaining file (2026-11-04): the workflow's chain step reads
+    # this and dispatches the next send run only when this tick
+    # attempted > 0. A missing file (crash before this point) means
+    # no chain; the schedule remains the backstop.
+    try:
+        with open("tick_attempted.txt", "w") as fh:
+            fh.write(str(attempted))
     except Exception:
         pass
     print(f"send tick done: shard={args.shard}/{args.shards} delivered={delivered} attempted={attempted} failed={failed} reasons={reason_counts}")
