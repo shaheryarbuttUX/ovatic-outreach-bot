@@ -140,9 +140,31 @@ def main():
     errors = 0
     pulled_rows = []
     queue_rows = []
+    # Incremental flush (2026-11-04): bridge runs kept timing out
+    # at 30 minutes and, because rows were only appended at the
+    # end, a timeout lost the whole run. Flushing every 20 queued
+    # rows, and every 100 pulled rows, means a timeout still keeps
+    # the work done so far, including skipped rows that would
+    # otherwise be rescanned next run.
+    def _flush():
+        nonlocal queue_rows, pulled_rows
+        if queue_rows:
+            try:
+                sheets.append_values("Queue!A:P", queue_rows)
+            except Exception:
+                pass
+            queue_rows = []
+        if pulled_rows:
+            try:
+                sheets.append_values("Pulled!A:C", pulled_rows)
+            except Exception:
+                pass
+            pulled_rows = []
     for row in directory:
         if queued >= args.max_new:
             break
+        if len(pulled_rows) >= 100:
+            _flush()
         place_key = (row.get("place_key", "") or "").strip().lower()
         website = (row.get("website", "") or "").strip()
         if not place_key or place_key in pulled_keys or not website:
@@ -205,25 +227,9 @@ def main():
         pulled_keys.add(place_key)
         seen_domains.add(domain)
         queued += 1
-        # Incremental flush (2026-11-04): bridge runs kept timing out
-        # at 30 minutes and, because rows were only appended at the
-        # end, a timeout lost the whole run. Flushing every 20 queued
-        # rows means a timeout still keeps the work done so far.
         if len(queue_rows) >= 20:
-            try:
-                sheets.append_values("Queue!A:P", queue_rows)
-            except Exception:
-                pass
-            queue_rows = []
-            try:
-                sheets.append_values("Pulled!A:C", pulled_rows)
-            except Exception:
-                pass
-            pulled_rows = []
-    if queue_rows:
-        sheets.append_values("Queue!A:P", queue_rows)
-    if pulled_rows:
-        sheets.append_values("Pulled!A:C", pulled_rows)
+            _flush()
+    _flush()
     try:
         sheets.append_values("Log!A:D", [[now.isoformat(), "bridge",
             f"queued={queued} skipped={skipped} errors={errors}", queued]])

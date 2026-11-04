@@ -740,6 +740,14 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-send", type=int, default=10)
+    # Parallel shards (2026-11-04, user-approved): the tick was the
+    # bottleneck because one serial job took 30-50 minutes per 40
+    # attempts while scheduled runs queued behind it. With N jobs,
+    # job k takes only Queue rows whose sheet row number mod N == k,
+    # so no two jobs ever touch the same row and no lead is attempted
+    # twice. Shard 0 of 1 is the old single-job behaviour.
+    ap.add_argument("--shard", type=int, default=0)
+    ap.add_argument("--shards", type=int, default=1)
     args = ap.parse_args()
     dry = os.environ.get("DRY_RUN", "true").lower() != "false"
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -795,6 +803,13 @@ def main():
             continue
         if not row.get("contact_form_url", "").strip():
             continue
+        if args.shards > 1:
+            try:
+                row_no = int(row.get("_row", 0) or 0)
+            except Exception:
+                row_no = 0
+            if row_no % args.shards != args.shard:
+                continue
         sendable.append(row)
     print(f"send tick: dry_run={dry} delivered_today={delivered_today} sendable={len(sendable)} max_attempts={args.max_send}")
     if dry:
@@ -899,10 +914,10 @@ def main():
     try:
         reasons = ",".join(f"{k}={v}" for k, v in sorted(reason_counts.items()))
         groq = ",".join(f"{k}={v}" for k, v in sorted(GROQ_STATS.items()))
-        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons} groq:{groq}", delivered]])
+        sheets.append_values("Log!A:D", [[now.isoformat(), "send", f"shard={args.shard}/{args.shards} delivered={delivered} attempted={attempted} failed={failed} delivered_today={delivered_today + delivered} reasons:{reasons} groq:{groq}", delivered]])
     except Exception:
         pass
-    print(f"send tick done: delivered={delivered} attempted={attempted} failed={failed} reasons={reason_counts}")
+    print(f"send tick done: shard={args.shard}/{args.shards} delivered={delivered} attempted={attempted} failed={failed} reasons={reason_counts}")
 
 
 if __name__ == "__main__":
