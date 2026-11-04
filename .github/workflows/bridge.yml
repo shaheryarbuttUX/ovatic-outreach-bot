@@ -18,6 +18,6 @@ jobs:
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/bridge.py --max-new 100
+        run: python scripts/bridge.py --max-new 30
       - name: Log count only, never lead names (public repo logs are public)
         run: echo "bridge tick done, lead data lives in Google Sheet only, not in repo"
