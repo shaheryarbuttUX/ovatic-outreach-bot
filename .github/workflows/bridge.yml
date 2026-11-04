@@ -1,7 +1,7 @@
 name: bridge-directory-to-queue
 on:
   schedule:
-    - cron: '*/30 * * * *'→ Runs every 30 minutes
+    - cron: '*/30 * * * *'
 
   workflow_dispatch:
 
