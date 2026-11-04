@@ -1,13 +1,19 @@
 name: send-forms
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/10 * * * *'→ Runs every 10 minutes
+
   workflow_dispatch:
+
 concurrency:
   group: send-forms
   cancel-in-progress: false
+
 jobs:
   send:
+    strategy:
+      matrix:
+        shard: [0, 1, 2]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -25,12 +31,12 @@ jobs:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/send_form.py --max-send 40
+        run: python scripts/send_form.py --max-send 40 --shard ${{ matrix.shard }} --shards 3
       - name: Upload before/after screenshots for audit (7-day retention)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: send-screenshots-${{ github.run_id }}
+          name: send-screenshots-${{ github.run_id }}-shard${{ matrix.shard }}
           path: screenshots/
           retention-days: 7
       - name: Log count only, never lead names (public repo logs are public)
