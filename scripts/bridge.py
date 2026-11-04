@@ -12,6 +12,9 @@ lead to Queue with status queued, approved yes.
 Skipped for a permanent reason (CAPTCHA on the form page, no form,
 404) is marked pulled so it is never re-fetched. A transient fetch
 failure is NOT marked pulled, so a later run retries it.
+Domains whose homepage fetch fails on two earlier ticks are marked
+pulled (fetch_errors_repeated) via the FetchErrors tab, so dead
+sites stop being re-fetched on every tick (2026-11-05).
 Counts only in logs, never lead names or websites.
 """
 
@@ -29,6 +32,7 @@ SKIP_DOMAINS = ["facebook.com", "instagram.com", "linkedin.com", "twitter.com",
 WEBSITE_FIGMA = "https://www.figma.com/design/9LfCw6faDaXvFQfWSFkM2C/Website-Portfolio--Client-Sharing-?node-id=159-12849&t=u2nBTJ3IEOLMJnQh-1"
 DASHBOARD_FIGMA = "https://www.figma.com/design/4OzS8KcSeOLgXVbGMjCVZ1/Dashboard-Portfolio--Client-Sharing-?node-id=1-15548&t=YUB9pL13pk5InsaD-1"
 PULLED_HEADERS = ["place_key", "pulled_at", "outcome"]
+FETCH_ERROR_HEADERS = ["domain", "error_at", "outcome"]
 
 
 def fetch(url):
@@ -133,10 +137,17 @@ def main():
         queue = sheets.rows_to_dicts(sheets.read_values("Queue!A:P"))
         sent = sheets.rows_to_dicts(sheets.read_values("Sent!A:H"))
         pulled = sheets.rows_to_dicts(sheets.read_values("Pulled!A:C"))
+        sheets.ensure_tab("FetchErrors", FETCH_ERROR_HEADERS)
+        fetch_errors = sheets.rows_to_dicts(sheets.read_values("FetchErrors!A:C"))
     except Exception as e:
         print(f"bridge tick: sheet unavailable: {type(e).__name__}")
         return
     pulled_keys = {r.get("place_key", "").strip().lower() for r in pulled}
+    error_counts = {}
+    for r in fetch_errors:
+        d = (r.get("domain", "") or "").strip().lower()
+        if d:
+            error_counts[d] = error_counts.get(d, 0) + 1
     seen_domains = set()
     for row in queue + sent:
         d = domain_of(row.get("website", ""))
@@ -150,6 +161,7 @@ def main():
     errors = 0
     pulled_rows = []
     queue_rows = []
+    fetch_error_rows = []
     # Incremental flush (2026-11-04): bridge runs kept timing out
     # at 30 minutes and, because rows were only appended at the
     # end, a timeout lost the whole run. Flushing every 20 queued
@@ -157,7 +169,7 @@ def main():
     # the work done so far, including skipped rows that would
     # otherwise be rescanned next run.
     def _flush():
-        nonlocal queue_rows, pulled_rows
+        nonlocal queue_rows, pulled_rows, fetch_error_rows
         if queue_rows:
             try:
                 sheets.append_values("Queue!A:P", queue_rows)
@@ -170,10 +182,16 @@ def main():
             except Exception:
                 pass
             pulled_rows = []
+        if fetch_error_rows:
+            try:
+                sheets.append_values("FetchErrors!A:C", fetch_error_rows)
+            except Exception:
+                pass
+            fetch_error_rows = []
     for row in directory:
         if queued >= args.max_new:
             break
-        if len(pulled_rows) >= 100:
+        if len(pulled_rows) >= 100 or len(fetch_error_rows) >= 100:
             _flush()
         place_key = (row.get("place_key", "") or "").strip().lower()
         website = (row.get("website", "") or "").strip()
@@ -187,11 +205,20 @@ def main():
             continue
         if args.shards > 1 and int(hashlib.md5(domain.encode()).hexdigest(), 16) % args.shards != args.shard:
             continue
+        # Dead-row cleanup (2026-11-05): a domain whose homepage
+        # fetch failed on two earlier ticks is pulled without
+        # fetching again, so dead sites stop eating every tick.
+        if error_counts.get(domain, 0) >= 2:
+            pulled_rows.append([place_key, now.isoformat(), "fetch_errors_repeated"])
+            pulled_keys.add(place_key)
+            skipped += 1
+            continue
         base = f"https://{domain}"
         try:
             home = fetch(base)
         except Exception:
             errors += 1
+            fetch_error_rows.append([domain, now.isoformat(), "fetch_error"])
             continue
         title, desc, h1 = site_text(home)
         personalization = h1 or title or desc
