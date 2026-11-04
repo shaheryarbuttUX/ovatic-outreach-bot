@@ -5,11 +5,17 @@ spirit, with the lead personalization line prepended and exactly one
 Figma link per lead (website Figma for web agencies, dashboard Figma
 for product/SaaS agencies, chosen from the Queue figma_link column).
 
-Counting, user order 2026-10-31:
-- SUCCESS = server accepted the form AND a thank-you/success response
-  was seen. Only this counts toward 500 and only this goes to Sent
-  as delivered.
-- FAIL = CAPTCHA, block, timeout, form error, or no success response.
+Counting, user order 2026-10-31, amended 2026-11-04 (user-approved
+server-acceptance check):
+- SUCCESS = server accepted the form AND (a thank-you/success
+  response was seen OR the form's own server request returned 2xx).
+  Only this counts toward 500 and only this goes to Sent
+  as delivered. A server-accepted delivery is labelled
+  "server_accepted" in Sent and Log, kept distinct from
+  "success_response_seen", so the two proofs stay auditable
+  separately.
+- FAIL = CAPTCHA, block, timeout, form error, or no success response
+  and no server acceptance.
   Fail is logged separately, never counted as success, and the Queue
   row is marked failed so it is not retried the same day.
 - DRY_RUN=true (default) means NO live submit at all. The tick only
@@ -17,8 +23,11 @@ Counting, user order 2026-10-31:
 
 Guards, never bypassed:
 - No CAPTCHA/Turnstile/hCaptcha solving or evasion. CAPTCHA = fail.
-- No fake success. No success response = fail, even if the form
-  looked like it submitted.
+- No fake success. No success response and no same-site server
+  acceptance = fail, even if the form looked like it submitted.
+  Server acceptance means the form's own POST to the site's own
+  domain returned 2xx with no validation-error text on the page;
+  tracking/analytics POSTs and other domains never count.
 - No duplicate: a company or website already in Sent is skipped.
 - No lead names, websites or message text in stdout logs. Public
   repo logs carry counts only.
@@ -30,6 +39,7 @@ import datetime
 import os
 import re
 import time
+import urllib.parse
 
 WEBSITE_FIGMA = "https://www.figma.com/design/9LfCw6faDaXvFQfWSFkM2C/Website-Portfolio--Client-Sharing-?node-id=159-12849&t=u2nBTJ3IEOLMJnQh-1"
 DASHBOARD_FIGMA = "https://www.figma.com/design/4OzS8KcSeOLgXVbGMjCVZ1/Dashboard-Portfolio--Client-Sharing-?node-id=1-15548&t=YUB9pL13pk5InsaD-1"
@@ -45,6 +55,14 @@ SUCCESS_WORDS = [
     "successfully submitted", "successfully sent",
     "your message has been received", "message received",
     "we have received",
+]
+# Narrow validation-error phrases. Used only by the 2026-11-04
+# server-acceptance check: a same-site POST 2xx still does NOT count
+# if the page shows one of these after submit.
+SERVER_ERROR_WORDS = [
+    "is required", "please fill", "invalid email", "invalid input",
+    "failed to send", "could not send", "something went wrong",
+    "there was an error", "please correct", "required field",
 ]
 # A page that says the visitor was blocked is not a form page at all.
 # It must be reported as bot_blocked, never as no_form_found or
@@ -311,6 +329,16 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
     that is NEW after submit, or the form itself disappearing after
     submit while a success word is present. Screenshots before and
     after submit are the audit proof for every attempt.
+
+    Server acceptance, added 2026-11-04 (user-approved): the biggest
+    failure bucket was no_success_response (44% of attempts), yet
+    auto-replies proved some of those forms HAD reached the agency.
+    So a same-site form POST returning 2xx, with no validation-error
+    text on the page afterwards, also counts as delivered, labelled
+    "server_accepted" so it stays distinguishable from a visible
+    success response. Well-behaved servers return 4xx on validation
+    failure, so a same-site 2xx is server-side acceptance, not a
+    loosened text check. Tracking and third-party POSTs never count.
     """
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
@@ -625,6 +653,32 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     return True
             return _success_seen()
 
+        # Server-acceptance listener (2026-11-04): record same-site
+        # POST responses from the submit click onward. It must be
+        # attached BEFORE the click, or the submit POST is missed.
+        # The page is shared across attempts in a tick, so each
+        # attempt keeps its own list; a listener left behind only
+        # appends to its own dead list and cannot leak into the
+        # next attempt.
+        accepted_posts = []
+        try:
+            page_domain = urllib.parse.urlparse(form_url).netloc.lower().replace("www.", "")
+        except Exception:
+            page_domain = ""
+        def _on_response(resp):
+            try:
+                if resp.request.method != "POST":
+                    return
+                host = urllib.parse.urlparse(resp.url).netloc.lower().replace("www.", "")
+                if not page_domain or host != page_domain:
+                    return
+                accepted_posts.append(resp.status)
+            except Exception:
+                pass
+        try:
+            page.on("response", _on_response)
+        except Exception:
+            pass
         if not _click_submit():
             return "failed", "no_submit_button", before_shot, after_shot
         ok = _poll(20)
@@ -646,8 +700,31 @@ def submit_one(page, form_url, company, personalization, figma, shot_prefix=""):
                     pass
         if after_shot:
             _shot(page, after_shot)
+        server_accepted = False
+        if not ok:
+            # Server-acceptance fallback (2026-11-04): visible success
+            # failed, but if the site's own server took the POST
+            # (2xx) and the page shows no validation-error text, the
+            # form reached the agency even though no thank-you text
+            # appeared. Labelled separately so audits can measure it.
+            try:
+                server_ok = any(200 <= s < 300 for s in accepted_posts)
+            except Exception:
+                server_ok = False
+            if server_ok:
+                try:
+                    after_text = page.content().lower()
+                except Exception:
+                    after_text = ""
+                if not any(w in after_text for w in SERVER_ERROR_WORDS):
+                    server_accepted = True
+                    ok = True
+        try:
+            page.remove_listener("response", _on_response)
+        except Exception:
+            pass
         if ok:
-            return "delivered", "success_response_seen", before_shot, after_shot
+            return "delivered", ("server_accepted" if server_accepted else "success_response_seen"), before_shot, after_shot
         return "failed", "no_success_response", before_shot, after_shot
     except PlaywrightTimeout:
         if after_shot:
