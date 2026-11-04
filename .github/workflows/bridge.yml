@@ -9,8 +9,15 @@ concurrency:
   group: bridge
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   bridge:
+    strategy:
+      matrix:
+        shard: [0, 1, 2]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,6 +31,26 @@ jobs:
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/bridge.py --max-new 60
+        run: python scripts/bridge.py --max-new 60 --shard ${{ matrix.shard }} --shards 3
       - name: Log count only, never lead names (public repo logs are public)
         run: echo "bridge tick done, lead data lives in Google Sheet only, not in repo"
+      - name: Chain next bridge run while rows remain
+        if: always() && matrix.shard == 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          QUEUED=0
+          if [ -f bridge_queued.txt ]; then
+            QUEUED=$(cat bridge_queued.txt)
+          fi
+          echo "queued: $QUEUED"
+          if [ "$QUEUED" -gt 0 ]; then
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/shaheryarbuttUX/ovatic-outreach-bot/actions/workflows/bridge.yml/dispatches \
+              -d '{"ref":"main"}')
+            echo "dispatch HTTP status: $STATUS"
+          else
+            echo "chaining stopped"
+          fi
