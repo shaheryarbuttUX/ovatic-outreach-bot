@@ -1,0 +1,35 @@
+name: new-business-registry
+on:
+  schedule:
+    - cron: '35 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      max_new:
+        description: 'Max new companies to add this run'
+        default: '60'
+      days:
+        description: 'Only companies incorporated within this many days'
+        default: '90'
+concurrency:
+  group: new-business-registry
+  cancel-in-progress: false
+jobs:
+  new-business:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Scan company registries for newly incorporated businesses
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          COMPANIES_HOUSE_API_KEY: ${{ secrets.COMPANIES_HOUSE_API_KEY }}
+          OPENCORPORATES_TOKEN: ${{ secrets.OPENCORPORATES_TOKEN }}
+        run: python scripts/new_business_registry.py --max-new "${{ inputs.max_new || '60' }}" --days "${{ inputs.days || '90' }}"
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "new-business tick done, lead data lives in Google Sheet only, not in repo"
