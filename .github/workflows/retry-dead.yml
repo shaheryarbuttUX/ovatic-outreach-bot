@@ -1,0 +1,32 @@
+name: retry-dead-domains
+on:
+  schedule:
+    - cron: '5 7 * * 0'
+
+  workflow_dispatch:
+    inputs:
+      max_new:
+        description: 'Max dead domains to re-check this run'
+        default: '500'
+
+permissions:
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Re-check fetch-dead domains, revive the live ones
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/retry_dead.py --max-new "${{ inputs.max_new || '500' }}"
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "retry-dead tick done, lead data lives in Google Sheet only, not in repo"
