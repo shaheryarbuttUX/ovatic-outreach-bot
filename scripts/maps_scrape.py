@@ -256,6 +256,14 @@ def main():
     ap.add_argument("--max-queries", type=int, default=90)
     ap.add_argument("--max-results", type=int, default=40)
     ap.add_argument("--delay", type=float, default=4.0)
+    # Parallel shards (2026-11-05): the todo list is split by
+    # position (index mod shards), so each shard gets a mix of
+    # old-locality and new-city queries. Done-filtering happens
+    # first, so a query is never done twice even if its index
+    # shifts between runs. Per-shard concurrency groups in
+    # maps.yml keep the shards running in parallel.
+    ap.add_argument("--shard", type=int, default=0)
+    ap.add_argument("--shards", type=int, default=1)
     args = ap.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
     stamp = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -278,9 +286,13 @@ def main():
         if row.get("key"):
             done.add(row["key"])
     queries = [q for q in load_queries() if q["key"] not in done]
+    if args.shards > 1:
+        queries = [q for i, q in enumerate(queries) if i % args.shards == args.shard]
     if args.max_queries:
         queries = queries[:args.max_queries]
-    print(f"maps tick: total_queries={len(load_queries())} done={len(done)} todo={len(queries)}")
+    # flush=True: without it GitHub shows no script output for
+    # hours on long runs (seen on run #33), so progress is invisible.
+    print(f"maps tick: shard={args.shard}/{args.shards} total_queries={len(load_queries())} done={len(done)} todo={len(queries)}", flush=True)
     if not queries:
         return
     from playwright.sync_api import sync_playwright
@@ -330,15 +342,15 @@ def main():
             summary["queries_done"] += 1
             summary["found"] += len(records)
             summary["added"] += len(new_rows)
-            print(f"maps tick: query done, found={len(records)} new={len(new_rows)}")
+            print(f"maps tick: query done, found={len(records)} new={len(new_rows)}", flush=True)
         browser.close()
     try:
         sheets.append_values("Log!A:D", [[now.isoformat(), "maps",
-            f"queries={summary['queries_done']} found={summary['found']} added={summary['added']} blocked={summary['blocked']}",
+            f"shard={args.shard}/{args.shards} queries={summary['queries_done']} found={summary['found']} added={summary['added']} blocked={summary['blocked']}",
             summary["added"]]])
     except Exception:
         pass
-    print(f"maps tick done: {summary}")
+    print(f"maps tick done: {summary}", flush=True)
     if summary["blocked"]:
         raise SystemExit(3)
 
