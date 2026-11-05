@@ -16,11 +16,20 @@ Sources, in order:
    handshake timed out there); guarded by a short timeout so a dead
    fallback costs minutes, not the run.
 
+Timeout lesson (2026-11-05): the first version scanned all patterns
+and only saved at the end, so when crt.sh retries ate the 30-minute
+workflow limit the run was CANCELLED and nothing was saved. This
+version therefore (a) saves after EVERY pattern, (b) keeps retries
+short (2 attempts, 15s timeout), (c) stops starting new patterns
+once the time budget (default 22 min) is nearly gone, and (d) rotates
+the pattern order by UTC hour so a slow crt.sh cannot starve the
+same tail patterns on every run.
+
 Freshness: a cert is only kept when its not_before is inside the
 lookback window (default 48h). An RDAP check (capped, best effort)
 then drops domains whose registration is older than 90 days, so a
 renewed cert on a ten-year-old domain does not pose as new. An RDAP
-failure never drops a row, it just marks it age_unverified.
+failure never drops a row, it just keeps it.
 
 Output: Directory rows with place_key "ct:<domain>", so the existing
 Bridge picks them up exactly like Maps rows (form check, CAPTCHA
@@ -74,24 +83,24 @@ EU_TLDS = (".co.uk", ".uk", ".de", ".nl", ".ie", ".se", ".dk",
            ".ch", ".at", ".fr", ".es", ".it", ".be", ".pl", ".eu")
 
 
-def fetch_json(url, timeout=30):
+def fetch_json(url, timeout=15):
     req = urllib.request.Request(
         url, headers={"User-Agent": "Mozilla/5.0 ovatic-new-domains"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8", "ignore"))
 
 
-def fetch_crt_pattern(pattern, attempts=3):
-    """One crt.sh pattern, retried. Returns (entries, ok)."""
+def fetch_crt_pattern(pattern, attempts=2):
+    """One crt.sh pattern, retried briefly. Returns (entries, ok)."""
     url = ("https://crt.sh/?q=" + urllib.parse.quote(pattern)
            + "&output=json&exclude=expired")
     last_err = None
     for i in range(attempts):
         try:
-            return fetch_json(url), True
+            return fetch_json(url, timeout=15), True
         except Exception as e:
             last_err = e
-            time.sleep(10 * (i + 1))
+            time.sleep(5 * (i + 1))
     print(f"crt pattern failed after {attempts} tries: {type(last_err).__name__}")
     return [], False
 
@@ -181,19 +190,91 @@ def main():
     ap.add_argument("--lookback-hours", type=int, default=48)
     ap.add_argument("--certstream-minutes", type=int, default=3)
     ap.add_argument("--max-rdap-checks", type=int, default=40)
+    ap.add_argument("--time-budget-minutes", type=int, default=22)
     args = ap.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
     cutoff = now - datetime.timedelta(hours=args.lookback_hours)
+    started = time.time()
+    budget = args.time_budget_minutes * 60
 
-    candidates = {}  # domain -> (not_before, pattern, keyword)
+    def time_left():
+        return budget - (time.time() - started)
+
+    try:
+        import sheets
+        sheets.ensure_tab("Directory", DIRECTORY_HEADERS)
+        directory = sheets.rows_to_dicts(sheets.read_values("Directory!A:P"))
+        queue = sheets.rows_to_dicts(sheets.read_values("Queue!A:P"))
+        sent = sheets.rows_to_dicts(sheets.read_values("Sent!A:H"))
+        pulled = sheets.rows_to_dicts(sheets.read_values("Pulled!A:C"))
+    except Exception:
+        print("new-domains tick: sheet unavailable")
+        return
+
+    seen_domains = set()
+    for row in directory + queue + sent:
+        w = (row.get("website", "") or "").strip().lower()
+        if w:
+            seen_domains.add(w.replace("https://", "").replace("http://", "")
+                             .replace("www.", "").strip("/"))
+    seen_keys = {((row.get("place_key", "") or "").strip().lower())
+                 for row in directory + pulled}
+
+    state = {"added": 0, "rdap_checked": 0, "candidates": 0}
+
+    def flush(cands):
+        """Dedupe + RDAP + append one batch immediately. Returns added."""
+        rows = []
+        for domain, (nb, pattern, keyword) in sorted(cands.items()):
+            if state["added"] + len(rows) >= args.max_new:
+                break
+            if domain in seen_domains or ("ct:" + domain) in seen_keys:
+                continue
+            if time_left() < 30:
+                break
+            if state["rdap_checked"] < args.max_rdap_checks:
+                state["rdap_checked"] += 1
+                days = rdap_created_days(domain)
+                if days is not None and days > 90:
+                    continue
+                time.sleep(0.3)
+            rows.append([
+                human_name(domain), keyword, "", "", "", "", "",
+                "", f"https://{domain}", "", "", f"ct:{domain}",
+                f"crt.sh:{pattern}", region_of(domain), keyword,
+                now.isoformat(),
+            ])
+        if not rows:
+            return 0
+        try:
+            sheets.append_values("Directory!A:P", rows)
+        except Exception as e:
+            print(f"new-domains tick: append failed: {type(e).__name__}")
+            return -1
+        for r in rows:
+            seen_domains.add(r[8].replace("https://", ""))
+            seen_keys.add(r[11])
+        state["added"] += len(rows)
+        return len(rows)
+
+    # Rotate pattern order by UTC hour so a slow crt.sh cannot starve
+    # the same tail patterns on every run.
+    start_idx = now.hour % len(PATTERNS)
+    ordered = PATTERNS[start_idx:] + PATTERNS[:start_idx]
     patterns_ok = 0
     patterns_failed = 0
-    for pattern in PATTERNS:
+    for pattern in ordered:
+        if state["added"] >= args.max_new:
+            break
+        if time_left() < 60:
+            print("new-domains tick: time budget reached, stopping early")
+            break
         entries, ok = fetch_crt_pattern(pattern)
         if not ok:
             patterns_failed += 1
             continue
         patterns_ok += 1
+        cands = {}
         for entry in entries or []:
             try:
                 nb = datetime.datetime.fromisoformat(
@@ -211,103 +292,37 @@ def main():
                 hit = [k for k in KEYWORDS if k in apex]
                 if not hit:
                     continue
-                if apex not in candidates:
-                    candidates[apex] = (nb, pattern, hit[0])
+                if apex not in cands:
+                    cands[apex] = (nb, pattern, hit[0])
+        state["candidates"] += len(cands)
+        if flush(cands) < 0:
+            break
         time.sleep(1)
 
-    if not candidates and patterns_failed > 0 and args.certstream_minutes > 0:
+    if (state["added"] == 0 and patterns_failed > 0
+            and args.certstream_minutes > 0
+            and time_left() > (args.certstream_minutes + 1) * 60):
         print("crt.sh yielded nothing, trying certstream fallback")
+        cs = {}
         for apex in certstream_capture(args.certstream_minutes, KEYWORDS):
-            if apex not in candidates and not any(
-                    s in apex for s in SKIP_SUBSTRINGS):
+            if apex not in cs and not any(s in apex for s in SKIP_SUBSTRINGS):
                 hit = [k for k in KEYWORDS if k in apex]
-                candidates[apex] = (now, "certstream", hit[0] if hit else "agency")
+                cs[apex] = (now, "certstream", hit[0] if hit else "agency")
+        state["candidates"] += len(cs)
+        flush(cs)
 
-    print(f"ct scan done: patterns_ok={patterns_ok} "
-          f"patterns_failed={patterns_failed} candidates={len(candidates)}")
-    if not candidates:
-        try:
-            import sheets
-            sheets.append_values("Log!A:D", [[
-                now.isoformat(), "new-domains-ct",
-                f"patterns_ok={patterns_ok} failed={patterns_failed} "
-                f"candidates=0 added=0 crt_unavailable"
-                if patterns_failed else
-                f"patterns_ok={patterns_ok} candidates=0 added=0",
-                0]])
-        except Exception:
-            pass
-        return
-
-    try:
-        import sheets
-        sheets.ensure_tab("Directory", DIRECTORY_HEADERS)
-        directory = sheets.rows_to_dicts(sheets.read_values("Directory!A:P"))
-        queue = sheets.rows_to_dicts(sheets.read_values("Queue!A:P"))
-        sent = sheets.rows_to_dicts(sheets.read_values("Sent!A:H"))
-        pulled = sheets.rows_to_dicts(sheets.read_values("Pulled!A:C"))
-    except Exception as e:
-        print(f"new-domains tick: sheet unavailable: {type(e).__name__}")
-        return
-
-    seen_domains = set()
-    for row in directory + queue + sent:
-        w = (row.get("website", "") or "").strip().lower()
-        if w:
-            seen_domains.add(w.replace("https://", "").replace("http://", "")
-                             .replace("www.", "").strip("/"))
-    seen_keys = {((row.get("place_key", "") or "").strip().lower())
-                 for row in directory + pulled}
-
-    fresh = []
-    for domain, (nb, pattern, keyword) in sorted(candidates.items()):
-        if domain in seen_domains or ("ct:" + domain) in seen_keys:
-            continue
-        fresh.append((domain, nb, pattern, keyword))
-        if len(fresh) >= args.max_new * 2:
-            break
-
-    # RDAP age check, capped so the run stays fast. A failure keeps
-    # the row (age_unverified); only a proven old registration drops it.
-    rows = []
-    rdap_checked = 0
-    for domain, nb, pattern, keyword in fresh:
-        if len(rows) >= args.max_new:
-            break
-        age_note = "age_unverified"
-        if rdap_checked < args.max_rdap_checks:
-            rdap_checked += 1
-            days = rdap_created_days(domain)
-            if days is not None:
-                age_note = f"rdap_age_days={days}"
-                if days > 90:
-                    continue
-            time.sleep(0.3)
-        rows.append([
-            human_name(domain), keyword, "", "", "", "", "",
-            "", f"https://{domain}", "", "", f"ct:{domain}",
-            f"crt.sh:{pattern}", region_of(domain), keyword,
-            now.isoformat(),
-        ])
-        _ = age_note
-
-    if rows:
-        try:
-            sheets.append_values("Directory!A:P", rows)
-        except Exception as e:
-            print(f"new-domains tick: append failed: {type(e).__name__}")
-            return
     try:
         sheets.append_values("Log!A:D", [[
             now.isoformat(), "new-domains-ct",
             f"patterns_ok={patterns_ok} failed={patterns_failed} "
-            f"candidates={len(candidates)} added={len(rows)} "
-            f"rdap_checked={rdap_checked}",
-            len(rows)]])
+            f"candidates={state['candidates']} added={state['added']} "
+            f"rdap_checked={state['rdap_checked']}",
+            state["added"]]])
     except Exception:
         pass
-    print(f"new-domains tick done: added={len(rows)} "
-          f"candidates={len(candidates)} patterns_failed={patterns_failed}")
+    print(f"new-domains tick done: added={state['added']} "
+          f"candidates={state['candidates']} "
+          f"patterns_failed={patterns_failed}")
 
 
 if __name__ == "__main__":
