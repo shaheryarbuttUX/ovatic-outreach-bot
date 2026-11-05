@@ -8,12 +8,15 @@ on:
         description: 'Queries to process this run'
         default: '20'
 concurrency:
-  group: maps-scrape
+  group: maps-scrape-${{ matrix.shard }}
   cancel-in-progress: false
 jobs:
   maps:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      matrix:
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,7 +30,7 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
         run: |
           set +e
-          python scripts/maps_scrape.py --max-queries "${{ inputs.max_queries || '90' }}" --delay 4
+          python scripts/maps_scrape.py --max-queries "${{ inputs.max_queries || '90' }}" --delay 4 --shard ${{ matrix.shard }} --shards 3
           code=$?
           if [ $code -eq 3 ]; then
             echo "Stopped early on a Google block - progress saved; the next run resumes."
