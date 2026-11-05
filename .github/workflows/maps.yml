@@ -7,11 +7,11 @@ on:
       max_queries:
         description: 'Queries to process this run'
         default: '20'
-concurrency:
-  group: maps-scrape-${{ matrix.shard }}
-  cancel-in-progress: false
 jobs:
   maps:
+    concurrency:
+      group: maps-scrape-${{ matrix.shard }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
