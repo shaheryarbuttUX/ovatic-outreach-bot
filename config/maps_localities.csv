@@ -395,3 +395,680 @@ Lucerne,CH
 Linz,AT
 Uppsala,SE
 Aalborg,DK
+Anaheim CA,US
+Fontana CA,US
+Moreno Valley CA,US
+Glendale CA,US
+Huntington Beach CA,US
+Santa Clarita CA,US
+Garden Grove CA,US
+Lancaster CA,US
+Palmdale CA,US
+Salinas CA,US
+Pomona CA,US
+Torrance CA,US
+Orange CA,US
+Fullerton CA,US
+Ventura CA,US
+West Covina CA,US
+Downey CA,US
+Costa Mesa CA,US
+Inglewood CA,US
+El Monte CA,US
+Burbank CA,US
+Richmond CA,US
+Daly City CA,US
+San Mateo CA,US
+Redwood City CA,US
+Palo Alto CA,US
+Mountain View CA,US
+Santa Clara CA,US
+Hayward CA,US
+Concord CA,US
+Antioch CA,US
+Vallejo CA,US
+Fairfield CA,US
+Vacaville CA,US
+Roseville CA,US
+Elk Grove CA,US
+Davis CA,US
+Chico CA,US
+Redding CA,US
+Merced CA,US
+Turlock CA,US
+Tracy CA,US
+Livermore CA,US
+Pleasanton CA,US
+San Rafael CA,US
+Novato CA,US
+Petaluma CA,US
+Santa Maria CA,US
+San Marcos CA,US
+Escondido CA,US
+Vista CA,US
+Chula Vista CA,US
+El Cajon CA,US
+Temecula CA,US
+Murrieta CA,US
+Lake Elsinore CA,US
+Menifee CA,US
+Hemet CA,US
+Perris CA,US
+Norwalk CA,US
+Cerritos CA,US
+Buena Park CA,US
+Lakewood CA,US
+Bellflower CA,US
+Compton CA,US
+Laredo TX,US
+Brownsville TX,US
+McAllen TX,US
+Beaumont TX,US
+Tyler TX,US
+Abilene TX,US
+Wichita Falls TX,US
+Odessa TX,US
+Midland TX,US
+San Angelo TX,US
+College Station TX,US
+Killeen TX,US
+Temple TX,US
+Lewisville TX,US
+Richardson TX,US
+Carrollton TX,US
+Allen TX,US
+Sugar Land TX,US
+Pearland TX,US
+League City TX,US
+Conroe TX,US
+Galveston TX,US
+Port Arthur TX,US
+New Braunfels TX,US
+Cedar Park TX,US
+Georgetown TX,US
+Pflugerville TX,US
+Missouri City TX,US
+Baytown TX,US
+Edinburg TX,US
+Cape Coral FL,US
+Port St. Lucie FL,US
+Lakeland FL,US
+Deltona FL,US
+Palm Bay FL,US
+Melbourne FL,US
+Stuart FL,US
+Port Charlotte FL,US
+Bradenton FL,US
+Clearwater FL,US
+Largo FL,US
+Plant City FL,US
+Winter Haven FL,US
+Kissimmee FL,US
+Sanford FL,US
+Oviedo FL,US
+Winter Park FL,US
+Apopka FL,US
+Ocala FL,US
+Panama City FL,US
+Destin FL,US
+Fort Walton Beach FL,US
+Gilbert AZ,US
+Surprise AZ,US
+Avondale AZ,US
+Goodyear AZ,US
+Buckeye AZ,US
+Yuma AZ,US
+Prescott AZ,US
+Lake Havasu City AZ,US
+Casa Grande AZ,US
+Maricopa AZ,US
+Sierra Vista AZ,US
+Las Vegas NV,US
+North Las Vegas NV,US
+Sparks NV,US
+Carson City NV,US
+West Valley City UT,US
+West Jordan UT,US
+Sandy UT,US
+South Jordan UT,US
+Lehi UT,US
+Orem UT,US
+Ogden UT,US
+Layton UT,US
+St. George UT,US
+Logan UT,US
+Bonn,DE
+Wiesbaden,DE
+Mainz,DE
+Darmstadt,DE
+Kassel,DE
+Bielefeld,DE
+Osnabrueck,DE
+Oldenburg,DE
+Braunschweig,DE
+Wolfsburg,DE
+Heilbronn,DE
+Ulm,DE
+Ingolstadt,DE
+Erlangen,DE
+Fuerth,DE
+Jena,DE
+Erfurt,DE
+Magdeburg,DE
+Flensburg,DE
+Trier,DE
+Koblenz,DE
+Saarbruecken,DE
+Kaiserslautern,DE
+Wuppertal,DE
+Bochum,DE
+Dortmund,DE
+Essen,DE
+Duisburg,DE
+Krefeld,DE
+Moenchengladbach,DE
+Hagen,DE
+Paderborn,DE
+Toulon,FR
+Saint-Etienne,FR
+Le Havre,FR
+Clermont-Ferrand,FR
+Aix-en-Provence,FR
+Nimes,FR
+Villeurbanne,FR
+Versailles,FR
+Metz,FR
+Besancon,FR
+Orleans,FR
+Caen,FR
+Perpignan,FR
+La Rochelle,FR
+Bayonne,FR
+Pau,FR
+Valence,FR
+Chambery,FR
+Le Mans,FR
+Tours,FR
+Poitiers,FR
+Limoges,FR
+Padua,IT
+Messina,IT
+Palermo,IT
+Catania,IT
+Cagliari,IT
+Sassari,IT
+Trapani,IT
+Syracuse,IT
+Ragusa,IT
+Valladolid,ES
+Burgos,ES
+Leon,ES
+Salamanca,ES
+Santander,ES
+Oviedo,ES
+Gijon,ES
+Logrono,ES
+Pamplona,ES
+San Sebastian,ES
+Vitoria-Gasteiz,ES
+Huesca,ES
+Cuenca,ES
+Guadalajara,ES
+Toledo,ES
+Ciudad Real,ES
+Albacete,ES
+Jaen,ES
+Cordoba,ES
+Granada,ES
+Huelva,ES
+Almeria,ES
+Cadiz,ES
+Jerez de la Frontera,ES
+Marbella,ES
+Fuengirola,ES
+Torremolinos,ES
+Benalmadena,ES
+Mijas,ES
+Estepona,ES
+Ronda,ES
+Antequera,ES
+Velez-Malaga,ES
+Nerja,ES
+Almunecar,ES
+Motril,ES
+Roquetas de Mar,ES
+El Ejido,ES
+Lorca,ES
+Cartagena,ES
+Orihuela,ES
+Torrevieja,ES
+Benidorm,ES
+Denia,ES
+Calpe,ES
+Altea,ES
+Elche,ES
+Elda,ES
+Alcoy,ES
+Gandia,ES
+Sagunto,ES
+Faro,PT
+Setubal,PT
+Evora,PT
+Santarem,PT
+Leiria,PT
+Castelo Branco,PT
+Guarda,PT
+Viseu,PT
+Aveiro,PT
+Viana do Castelo,PT
+Vila Real,PT
+Braganca,PT
+Portimao,PT
+Lagos,PT
+Tavira,PT
+Olhao,PT
+Loule,PT
+Albufeira,PT
+Apeldoorn,NL
+Enschede,NL
+Amersfoort,NL
+Den Bosch,NL
+Almere,NL
+Zoetermeer,NL
+Dordrecht,NL
+Alkmaar,NL
+Hoorn,NL
+Hilversum,NL
+Amstelveen,NL
+Gouda,NL
+Deventer,NL
+Sittard,NL
+Heerlen,NL
+Venlo,NL
+Roermond,NL
+Helmond,NL
+Oss,NL
+Genk,BE
+Sint-Niklaas,BE
+Aalst,BE
+Ostend,BE
+Roeselare,BE
+Turnhout,BE
+Dendermonde,BE
+Woking,UK
+Guildford,UK
+Slough,UK
+Basingstoke,UK
+Winchester,UK
+Salisbury,UK
+Poole,UK
+Bournemouth,UK
+Dorchester,UK
+Weymouth,UK
+Taunton,UK
+Yeovil,UK
+Bridgwater,UK
+Swindon,UK
+Banbury,UK
+Aylesbury,UK
+High Wycombe,UK
+Milton Keynes,UK
+Luton,UK
+Bedford,UK
+Northampton,UK
+Kettering,UK
+Corby,UK
+Stoke-on-Trent,UK
+Crewe,UK
+Macclesfield,UK
+Stockport,UK
+Wigan,UK
+Bolton,UK
+Bury,UK
+Rochdale,UK
+Oldham,UK
+Blackburn,UK
+Burnley,UK
+Preston,UK
+Blackpool,UK
+Morecambe,UK
+Kendal,UK
+Barrow-in-Furness,UK
+Whitehaven,UK
+Workington,UK
+Penrith,UK
+Hexham,UK
+Morpeth,UK
+Alnwick,UK
+Berwick-upon-Tweed,UK
+Darlington,UK
+Hartlepool,UK
+Middlesbrough,UK
+Redcar,UK
+Scarborough,UK
+Whitby,UK
+Harrogate,UK
+Ripon,UK
+Bradford,UK
+Huddersfield,UK
+Halifax,UK
+Wakefield,UK
+Doncaster,UK
+Rotherham,UK
+Barnsley,UK
+Chesterfield,UK
+Mansfield,UK
+Worksop,UK
+Retford,UK
+Gainsborough,UK
+Boston,UK
+Grimsby,UK
+Scunthorpe,UK
+Cleethorpes,UK
+Beverley,UK
+Driffield,UK
+Bridlington,UK
+Goole,UK
+Selby,UK
+Tadcaster,UK
+Wetherby,UK
+Knaresborough,UK
+Skipton,UK
+Settle,UK
+Ilkley,UK
+Otley,UK
+Guiseley,UK
+Yeadon,UK
+Horsforth,UK
+Pudsey,UK
+Morley,UK
+Castleford,UK
+Pontefract,UK
+Normanton,UK
+Featherstone,UK
+Knottingley,UK
+Snaith,UK
+Howden,UK
+Market Weighton,UK
+Pocklington,UK
+Malton,UK
+Pickering,UK
+Thirsk,UK
+Northallerton,UK
+Leyburn,UK
+Hawes,UK
+Kettlewell,UK
+Grassington,UK
+Pateley Bridge,UK
+Masham,UK
+Bedale,UK
+Catterick,UK
+Barnard Castle,UK
+Bishop Auckland,UK
+Spennymoor,UK
+Crook,UK
+Consett,UK
+Stanley,UK
+Chester-le-Street,UK
+Washington,UK
+South Shields,UK
+Jarrow,UK
+Hebburn,UK
+Wallsend,UK
+North Shields,UK
+Whitley Bay,UK
+Tynemouth,UK
+Blyth,UK
+Cramlington,UK
+Ashington,UK
+Bedlington,UK
+Seaton Delaval,UK
+Seaton Sluice,UK
+Monkseaton,UK
+Cullercoats,UK
+Gateshead,UK
+Felling,UK
+Seaham,UK
+Peterlee,UK
+Saltburn-by-the-Sea,UK
+Guisborough,UK
+Stokesley,UK
+Great Ayton,UK
+Filey,UK
+Hornsea,UK
+Withernsea,UK
+Szczecin,PL
+Bydgoszcz,PL
+Lublin,PL
+Katowice,PL
+Bialystok,PL
+Gdynia,PL
+Czestochowa,PL
+Radom,PL
+Torun,PL
+Sosnowiec,PL
+Kielce,PL
+Gliwice,PL
+Zabrze,PL
+Olsztyn,PL
+Rzeszow,PL
+Bielsko-Biala,PL
+Bytom,PL
+Ruda Slaska,PL
+Rybnik,PL
+Tychy,PL
+Opole,PL
+Gorzow Wielkopolski,PL
+Zielona Gora,PL
+Elblag,PL
+Plock,PL
+Walbrzych,PL
+Wloclawek,PL
+Tarnow,PL
+Chorzow,PL
+Kalisz,PL
+Koszalin,PL
+Legnica,PL
+Grudziadz,PL
+Jaworzno,PL
+Slupsk,PL
+Jastrzebie-Zdroj,PL
+Nowy Sacz,PL
+Jelenia Gora,PL
+Siedlce,PL
+Myslowice,PL
+Pila,PL
+Lubin,PL
+Ostrow Wielkopolski,PL
+Gniezno,PL
+Suwalki,PL
+Glogow,PL
+Chelm,PL
+Zamosc,PL
+Przemysl,PL
+Stalowa Wola,PL
+Kedzierzyn-Kozle,PL
+Leszno,PL
+Lomza,PL
+Zory,PL
+Belchatow,PL
+Swidnica,PL
+Elk,PL
+Biala Podlaska,PL
+Pabianice,PL
+Tomaszow Mazowiecki,PL
+Ostroleka,PL
+Swinoujscie,PL
+Zdunska Wola,PL
+Piotrkow Trybunalski,PL
+Starachowice,PL
+Skarzysko-Kamienna,PL
+Kolobrzeg,PL
+Wejherowo,PL
+Rumia,PL
+Srem,PL
+Krotoszyn,PL
+Gostyn,PL
+Rawicz,PL
+Koscian,PL
+Wolsztyn,PL
+Nowy Tomysl,PL
+Miedzychod,PL
+Szamotuly,PL
+Oborniki,PL
+Wagrowiec,PL
+Chodziez,PL
+Czarnkow,PL
+Trzcianka,PL
+Walcz,PL
+Drawsko Pomorskie,PL
+Szczecinek,PL
+Bialogard,PL
+Lebork,PL
+Tczew,PL
+Starogard Gdanski,PL
+Malbork,PL
+Braniewo,PL
+Frombork,PL
+Pieniezno,PL
+Orneta,PL
+Lidzbark Warminski,PL
+Bartoszyce,PL
+Ketrzyn,PL
+Mragowo,PL
+Gizycko,PL
+Olecko,PL
+Goldap,PL
+Augustow,PL
+Sejny,PL
+Wyszkow,PL
+Ostrow Mazowiecka,PL
+Lukow,PL
+Radzyn Podlaski,PL
+Parczew,PL
+Wlodawa,PL
+Hrubieszow,PL
+Tomaszow Lubelski,PL
+Bilgoraj,PL
+Janow Lubelski,PL
+Krasnik,PL
+Opole Lubelskie,PL
+Pulawy,PL
+Ryki,PL
+Deblin,PL
+Minsk Mazowiecki,PL
+Otwock,PL
+Wolomin,PL
+Legionowo,PL
+Piaseczno,PL
+Pruszkow,PL
+Grodzisk Mazowiecki,PL
+Zyrardow,PL
+Sochaczew,PL
+Plonsk,PL
+Ciechanow,PL
+Mlawa,PL
+Przasnysz,PL
+Makow Mazowiecki,PL
+Pultusk,PL
+Wegrow,PL
+Sokolow Podlaski,PL
+Losice,PL
+Terespol,PL
+Miedzyrzec Podlaski,PL
+Lubartow,PL
+Swidnik,PL
+Krasnystaw,PL
+Leczna,PL
+Naleczow,PL
+Kazimierz Dolny,PL
+Tromso,NO
+Stavanger,NO
+Kristiansand,NO
+Drammen,NO
+Fredrikstad,NO
+Sarpsborg,NO
+Moss,NO
+Hamar,NO
+Lillehammer,NO
+Gjovik,NO
+Alesund,NO
+Molde,NO
+Kristiansund,NO
+Haugesund,NO
+Sandnes,NO
+Arendal,NO
+Grimstad,NO
+Mandal,NO
+Flekkefjord,NO
+Egersund,NO
+Sauda,NO
+Odda,NO
+Voss,NO
+Forde,NO
+Floro,NO
+Sogndal,NO
+Oulu,FI
+Jyvaskyla,FI
+Kuopio,FI
+Lahti,FI
+Pori,FI
+Lappeenranta,FI
+Vaasa,FI
+Joensuu,FI
+Hameenlinna,FI
+Rovaniemi,FI
+Seinajoki,FI
+Mikkeli,FI
+Kotka,FI
+Salo,FI
+Porvoo,FI
+Kouvola,FI
+Lohja,FI
+Hyvinkaa,FI
+Jarvenpaa,FI
+Kerava,FI
+Drogheda,IE
+Dundalk,IE
+Kilkenny,IE
+Wexford,IE
+Wicklow,IE
+Bray,IE
+Arklow,IE
+Gorey,IE
+Enniscorthy,IE
+New Ross,IE
+Dungarvan,IE
+Clonmel,IE
+Thurles,IE
+Nenagh,IE
+Roscrea,IE
+Birr,IE
+Tullamore,IE
+Portlaoise,IE
+Athy,IE
+Carlow,IE
+Naas,IE
+Newbridge,IE
+Kildare,IE
+Maynooth,IE
+Leixlip,IE
+Celbridge,IE
+Dunboyne,IE
+Ashbourne,IE
+Navan,IE
+Trim,IE
+Kells,IE
+Cavan,IE
+Monaghan,IE
+Clones,IE
+Castleblayney,IE
+Carrickmacross,IE
+Balbriggan,IE
+Skerries,IE
+Rush,IE
+Lusk,IE
+Donabate,IE
+Portmarnock,IE
+Malahide,IE
+Howth,IE
