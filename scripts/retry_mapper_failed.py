@@ -17,11 +17,18 @@ The flip only changes status back to 'queued' and notes to
 any other queued row, with its usual guards (already-sent websites are
 skipped, screenshots are kept, Log counts only). Writes one Log row
 (counts only). No lead data in repo commits or public logs.
+
+Write discipline: the Sheets API rate-limits rapid writes, so flips
+pause briefly and RetryLog appends are batched (flushed every 50).
+A startup reconcile logs any row the Sheet already shows as flipped
+but RetryLog missed, so the once-only rule holds even if a write
+failed midway on an earlier run.
 """
 import argparse
 import datetime
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sheets
@@ -30,6 +37,16 @@ QUEUE_COLS = ["company", "website", "region", "contact_form_url",
     "personalization_line", "agency_size", "services", "source",
     "status", "approved", "created_at", "last_send_at", "send_count",
     "figma_link", "notes", "dedupe_key"]
+
+
+def _flush_log(rows):
+    if not rows:
+        return
+    try:
+        sheets.append_values("RetryLog!A:C", rows)
+    except Exception as e:
+        print(f"retry-mapper-failed: retrylog append failed: {type(e).__name__}")
+    rows.clear()
 
 
 def main():
@@ -46,6 +63,17 @@ def main():
         return
     already = {r.get("dedupe_key", "").strip() for r in retry_rows
                if r.get("dedupe_key", "").strip()}
+    # Reconcile: rows the Sheet already shows as flipped but RetryLog
+    # missed get logged now, so the once-only rule still holds.
+    repaired = 0
+    pending_log = []
+    for row in queue:
+        if (row.get("notes", "") or "").strip() == "retry_mapper_failed":
+            key = (row.get("dedupe_key", "") or "").strip()
+            if key and key not in already:
+                pending_log.append([key, now.isoformat(), "not_enough_fields_filled"])
+                already.add(key)
+                repaired += 1
     flipped = 0
     skipped_done = 0
     for row in queue:
@@ -64,21 +92,25 @@ def main():
         values[14] = "retry_mapper_failed"
         try:
             sheets.update_row("Queue", row["_row"], values)
-            sheets.append_values("RetryLog!A:C",
-                                 [[key, now.isoformat(), "not_enough_fields_filled"]])
         except Exception as e:
             print(f"retry-mapper-failed: sheet update failed row {row['_row']}: "
                   f"{type(e).__name__}")
             continue
+        pending_log.append([key, now.isoformat(), "not_enough_fields_filled"])
         already.add(key)
         flipped += 1
+        if len(pending_log) >= 50:
+            _flush_log(pending_log)
+        time.sleep(0.5)
+    _flush_log(pending_log)
     try:
         sheets.append_values("Log!A:D", [[now.isoformat(), "retry-mapper-failed",
-            f"flipped={flipped} skipped_already={skipped_done} max_flip={args.max_flip}",
-            flipped]])
+            f"flipped={flipped} repaired={repaired} skipped_already={skipped_done} "
+            f"max_flip={args.max_flip}", flipped]])
     except Exception:
         pass
-    print(f"retry-mapper-failed: flipped={flipped} skipped_already={skipped_done}")
+    print(f"retry-mapper-failed: flipped={flipped} repaired={repaired} "
+          f"skipped_already={skipped_done}")
 
 
 if __name__ == "__main__":
