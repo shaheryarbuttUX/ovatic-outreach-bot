@@ -284,7 +284,11 @@ def _llm_map_fields(descriptors):
         req = _urlreq.Request(
             "https://api.groq.com/openai/v1/chat/completions",
             data=body, headers={"Authorization": f"Bearer {key}",
-                                "Content-Type": "application/json"})
+                                "Content-Type": "application/json",
+                                # Cloudflare blocks Python-urllib's default
+                                # User-Agent on this endpoint (HTTP 403,
+                                # error code 1010); a browser UA passes.
+                                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
         with _urlreq.urlopen(req, timeout=15) as r:
             resp = _json.loads(r.read().decode("utf-8", "ignore"))
         text = resp["choices"][0]["message"]["content"]
