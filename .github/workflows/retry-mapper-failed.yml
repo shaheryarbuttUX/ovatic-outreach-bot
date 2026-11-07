@@ -1,0 +1,25 @@
+name: retry-mapper-failed
+on:
+  workflow_dispatch:
+    inputs:
+      max_flip:
+        description: 'Rows to flip back to queued'
+        default: '300'
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Flip mapper-failed rows back to queued
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/retry_mapper_failed.py --max-flip "${{ inputs.max_flip || '300' }}"
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "retry flip done, lead data lives in Google Sheet only, not in repo"
