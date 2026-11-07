@@ -226,7 +226,10 @@ def _follow_contact_link(page):
     return False
 
 
-GROQ_MODEL = "llama-3.1-8b-instant"
+# Groq retired llama-3.1-8b-instant for free/developer tiers on
+# 2026-08-16 (Enterprise-only now); openai/gpt-oss-20b is Groq's
+# official replacement for it (deprecations page, verified 2026-11-07).
+GROQ_MODEL = "openai/gpt-oss-20b"
 # Per-tick observability for the Groq mapper, so a missing or bad
 # key is visible in the Log instead of silently falling back to
 # keywords forever. Counters only, no lead data, no key material.
@@ -272,6 +275,9 @@ def _llm_map_fields(descriptors):
         "model": GROQ_MODEL,
         "temperature": 0,
         "max_tokens": 400,
+        # gpt-oss is a reasoning model: low effort keeps the tiny
+        # JSON reply inside max_tokens instead of reasoning past it.
+        "reasoning_effort": "low",
         "messages": [{"role": "user", "content": prompt}],
     }).encode("utf-8")
     try:
