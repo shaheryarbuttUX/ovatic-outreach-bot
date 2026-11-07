@@ -31,7 +31,7 @@ jobs:
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python scripts/bridge.py --max-new 60 --shard ${{ matrix.shard }} --shards 6
+        run: python scripts/bridge.py --max-new 150 --shard ${{ matrix.shard }} --shards 6
       - name: Log count only, never lead names (public repo logs are public)
         run: echo "bridge tick done, lead data lives in Google Sheet only, not in repo"
       - name: Chain next bridge run and wake Send while rows remain
