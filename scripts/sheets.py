@@ -6,9 +6,42 @@ This module prints counts only, never lead names, websites or messages.
 
 Required packages in the workflow (pip install step):
 google-api-python-client, google-auth
+
+Write discipline: several workflows (maps shards, bridge, send) write
+through the same service account, and the Sheets API allows only 60
+write requests/minute/user. Bursts used to crash scripts with an
+unhandled HttpError 429 (maps runs #57/#58, Nov 2026). Every API call
+here retries 429/5xx with exponential backoff instead of crashing, so
+a burst becomes a pause, not a failed run.
 """
 import json
 import os
+import time
+
+
+def _run(request, what):
+    """Execute a Sheets API request, retrying quota/transient errors.
+
+    Retries HTTP 429 (quota) and 500/502/503 up to 3 times with
+    10s/20s/40s backoff. A 429 means the request was rejected, not
+    executed, so a retry cannot duplicate it; a 5xx retry can in
+    theory duplicate an append, but downstream code filters by key
+    (Directory/Progress) or counts rows (Sent/Log), so the risk is
+    a duplicate log line, not a duplicate form submission.
+    """
+    delay = 10
+    for attempt in range(4):
+        try:
+            return request.execute()
+        except Exception as e:
+            status = getattr(getattr(e, "resp", None), "status", None)
+            if status in (429, 500, 502, 503) and attempt < 3:
+                print(f"sheets: {what} HTTP {status}, retry in {delay}s "
+                      f"(attempt {attempt + 1}/4)")
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise
 
 
 def _client():
@@ -29,9 +62,9 @@ def _client():
 
 def read_values(tab_range):
     service, sheet_id = _client()
-    result = service.spreadsheets().values().get(
+    result = _run(service.spreadsheets().values().get(
         spreadsheetId=sheet_id, range=tab_range
-    ).execute()
+    ), f"read {tab_range}")
     return result.get("values", [])
 
 
@@ -40,10 +73,10 @@ def append_values(tab_range, rows):
         return
     service, sheet_id = _client()
     body = {"values": rows}
-    service.spreadsheets().values().append(
+    _run(service.spreadsheets().values().append(
         spreadsheetId=sheet_id, range=tab_range,
         valueInputOption="USER_ENTERED", body=body
-    ).execute()
+    ), f"append {tab_range}")
 
 
 def update_row(tab, row_number, values):
@@ -51,27 +84,27 @@ def update_row(tab, row_number, values):
     service, sheet_id = _client()
     end_col = chr(ord("A") + len(values) - 1)
     body = {"values": [values]}
-    service.spreadsheets().values().update(
+    _run(service.spreadsheets().values().update(
         spreadsheetId=sheet_id, range=f"{tab}!A{row_number}:{end_col}{row_number}",
         valueInputOption="USER_ENTERED", body=body
-    ).execute()
+    ), f"update {tab}!A{row_number}")
 
 
 def ensure_tab(title, headers):
     """Create tab with headers if missing. No-op if it already exists."""
     service, sheet_id = _client()
-    meta = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    meta = _run(service.spreadsheets().get(spreadsheetId=sheet_id), "get sheet meta")
     existing = [s.get("properties", {}).get("title") for s in meta.get("sheets", [])]
     if title in existing:
         return
-    service.spreadsheets().batchUpdate(
+    _run(service.spreadsheets().batchUpdate(
         spreadsheetId=sheet_id,
         body={"requests": [{"addSheet": {"properties": {"title": title}}}]}
-    ).execute()
-    service.spreadsheets().values().update(
+    ), f"addSheet {title}")
+    _run(service.spreadsheets().values().update(
         spreadsheetId=sheet_id, range=f"{title}!A1",
         valueInputOption="USER_ENTERED", body={"values": [headers]}
-    ).execute()
+    ), f"ensure headers {title}")
 
 
 def rows_to_dicts(rows):
