@@ -36,7 +36,11 @@ FETCH_ERROR_HEADERS = ["domain", "error_at", "outcome"]
 
 
 def fetch(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    # Full browser UA, NOT bare "Mozilla/5.0": Cloudflare/WAFs return
+    # 403/406 or drop the connection for bare script UAs, which buried
+    # ~8,000 live agency sites as fetch_errors (Nov 2026). Same UA as
+    # the Groq mapper fix.
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.read().decode("utf-8", "ignore")
 

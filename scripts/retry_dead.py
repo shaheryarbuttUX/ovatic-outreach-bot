@@ -38,7 +38,10 @@ def domain_of(url):
 
 
 def fetch_alive(url, timeout=15):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    # Full browser UA: bare "Mozilla/5.0" gets 403/406/dropped by
+    # Cloudflare/WAFs, which made this sweep revive only 2/500 twice
+    # (Nov 2026) while the same sites answer a browser UA fine.
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return 200 <= r.status < 400
