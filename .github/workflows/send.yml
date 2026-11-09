@@ -63,5 +63,15 @@ jobs:
               -d '{"ref":"main"}')
             echo "dispatch HTTP status: $STATUS"
           else
-            echo "chaining stopped"
+            # No fuel this tick: wake Bridge so it can make fuel.
+            # Bridge's own chain dispatches send again when it queues
+            # > 0, closing the loop. If Bridge queues 0, its chain
+            # stops and everything rests on the schedule (no loop).
+            echo "no attempts this tick, waking bridge to make fuel"
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/shaheryarbuttUX/ovatic-outreach-bot/actions/workflows/bridge.yml/dispatches \
+              -d '{"ref":"main"}')
+          echo "bridge dispatch HTTP status: $STATUS"
           fi
