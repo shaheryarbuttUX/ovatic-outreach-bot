@@ -1,0 +1,251 @@
+{
+  "_comment": "Niche priority for bridge candidate ordering, computed from the Sheet on 2026-11-09. score = smoothed delivery rate x unprocessed Directory rows WITH a website (place_key not in Pulled). Smoothed rate = (delivered + 10*overall_rate) / (attempted + 10); overall rate 0.2859 (2600 delivered / 9095 attempted, maps:directory rows only). Bridge checks rows highest score first; niches absent from 'order' sort last, and equal-rank rows keep sheet order (stable sort). Only the ORDER of bridge's candidate scan changes; all skip rules (Pulled, seen domains, shard hash, FetchErrors) are untouched. NOTE: the backlog is nearly dry, only 81 unprocessed website rows remain, so this mostly orders fresh Maps rows as they arrive. Recompute after a big Maps cycle.",
+  "computed_at_utc": "2026-11-09T17:34:51Z",
+  "overall_delivery_rate": 0.2859,
+  "order": [
+    "software development agency",
+    "content marketing agency",
+    "ecommerce agency",
+    "product design agency",
+    "web design agency",
+    "graphic design agency",
+    "SEO agency",
+    "social media agency",
+    "video production agency",
+    "motion design agency",
+    "shopify agency",
+    "digital agency",
+    "creative agency",
+    "wordpress agency",
+    "mobile app agency",
+    "webflow agency",
+    "UI UX agency",
+    "branding agency",
+    "web development company",
+    "advertising agency",
+    "digital product agency",
+    "marketing agency"
+  ],
+  "niches": {
+    "software development agency": {
+      "score": 10.0,
+      "attempted": 602,
+      "delivered": 172,
+      "delivery_rate_raw": 0.2857,
+      "delivery_rate_smoothed": 0.2857,
+      "unprocessed_placekeys": 378,
+      "unprocessed_with_website": 35,
+      "directory_rows": 5303
+    },
+    "content marketing agency": {
+      "score": 3.4,
+      "attempted": 75,
+      "delivered": 26,
+      "delivery_rate_raw": 0.3467,
+      "delivery_rate_smoothed": 0.3395,
+      "unprocessed_placekeys": 74,
+      "unprocessed_with_website": 10,
+      "directory_rows": 746
+    },
+    "ecommerce agency": {
+      "score": 2.3,
+      "attempted": 212,
+      "delivered": 69,
+      "delivery_rate_raw": 0.3255,
+      "delivery_rate_smoothed": 0.3237,
+      "unprocessed_placekeys": 403,
+      "unprocessed_with_website": 7,
+      "directory_rows": 3212
+    },
+    "product design agency": {
+      "score": 2.2,
+      "attempted": 366,
+      "delivered": 116,
+      "delivery_rate_raw": 0.3169,
+      "delivery_rate_smoothed": 0.3161,
+      "unprocessed_placekeys": 337,
+      "unprocessed_with_website": 7,
+      "directory_rows": 5322
+    },
+    "web design agency": {
+      "score": 1.7,
+      "attempted": 1420,
+      "delivered": 344,
+      "delivery_rate_raw": 0.2423,
+      "delivery_rate_smoothed": 0.2426,
+      "unprocessed_placekeys": 256,
+      "unprocessed_with_website": 7,
+      "directory_rows": 8836
+    },
+    "graphic design agency": {
+      "score": 0.7,
+      "attempted": 139,
+      "delivered": 52,
+      "delivery_rate_raw": 0.3741,
+      "delivery_rate_smoothed": 0.3682,
+      "unprocessed_placekeys": 191,
+      "unprocessed_with_website": 2,
+      "directory_rows": 2281
+    },
+    "SEO agency": {
+      "score": 0.7,
+      "attempted": 503,
+      "delivered": 184,
+      "delivery_rate_raw": 0.3658,
+      "delivery_rate_smoothed": 0.3642,
+      "unprocessed_placekeys": 207,
+      "unprocessed_with_website": 2,
+      "directory_rows": 3705
+    },
+    "social media agency": {
+      "score": 0.7,
+      "attempted": 122,
+      "delivered": 43,
+      "delivery_rate_raw": 0.3525,
+      "delivery_rate_smoothed": 0.3474,
+      "unprocessed_placekeys": 178,
+      "unprocessed_with_website": 2,
+      "directory_rows": 1451
+    },
+    "video production agency": {
+      "score": 0.7,
+      "attempted": 814,
+      "delivered": 266,
+      "delivery_rate_raw": 0.3268,
+      "delivery_rate_smoothed": 0.3263,
+      "unprocessed_placekeys": 755,
+      "unprocessed_with_website": 2,
+      "directory_rows": 9491
+    },
+    "motion design agency": {
+      "score": 0.7,
+      "attempted": 177,
+      "delivered": 58,
+      "delivery_rate_raw": 0.3277,
+      "delivery_rate_smoothed": 0.3254,
+      "unprocessed_placekeys": 202,
+      "unprocessed_with_website": 2,
+      "directory_rows": 2664
+    },
+    "shopify agency": {
+      "score": 0.6,
+      "attempted": 215,
+      "delivered": 63,
+      "delivery_rate_raw": 0.293,
+      "delivery_rate_smoothed": 0.2927,
+      "unprocessed_placekeys": 270,
+      "unprocessed_with_website": 2,
+      "directory_rows": 2066
+    },
+    "digital agency": {
+      "score": 0.5,
+      "attempted": 427,
+      "delivered": 104,
+      "delivery_rate_raw": 0.2436,
+      "delivery_rate_smoothed": 0.2445,
+      "unprocessed_placekeys": 228,
+      "unprocessed_with_website": 2,
+      "directory_rows": 3845
+    },
+    "creative agency": {
+      "score": 0.3,
+      "attempted": 165,
+      "delivered": 47,
+      "delivery_rate_raw": 0.2848,
+      "delivery_rate_smoothed": 0.2849,
+      "unprocessed_placekeys": 307,
+      "unprocessed_with_website": 1,
+      "directory_rows": 2809
+    },
+    "wordpress agency": {
+      "score": 0.0,
+      "attempted": 403,
+      "delivered": 136,
+      "delivery_rate_raw": 0.3375,
+      "delivery_rate_smoothed": 0.3362,
+      "unprocessed_placekeys": 223,
+      "unprocessed_with_website": 0,
+      "directory_rows": 3949
+    },
+    "mobile app agency": {
+      "score": 0.0,
+      "attempted": 892,
+      "delivered": 277,
+      "delivery_rate_raw": 0.3105,
+      "delivery_rate_smoothed": 0.3103,
+      "unprocessed_placekeys": 559,
+      "unprocessed_with_website": 0,
+      "directory_rows": 7374
+    },
+    "webflow agency": {
+      "score": 0.0,
+      "attempted": 227,
+      "delivered": 70,
+      "delivery_rate_raw": 0.3084,
+      "delivery_rate_smoothed": 0.3074,
+      "unprocessed_placekeys": 159,
+      "unprocessed_with_website": 0,
+      "directory_rows": 1933
+    },
+    "UI UX agency": {
+      "score": 0.0,
+      "attempted": 391,
+      "delivered": 113,
+      "delivery_rate_raw": 0.289,
+      "delivery_rate_smoothed": 0.2889,
+      "unprocessed_placekeys": 402,
+      "unprocessed_with_website": 0,
+      "directory_rows": 4105
+    },
+    "branding agency": {
+      "score": 0.0,
+      "attempted": 181,
+      "delivered": 50,
+      "delivery_rate_raw": 0.2762,
+      "delivery_rate_smoothed": 0.2767,
+      "unprocessed_placekeys": 182,
+      "unprocessed_with_website": 0,
+      "directory_rows": 2902
+    },
+    "web development company": {
+      "score": 0.0,
+      "attempted": 654,
+      "delivered": 169,
+      "delivery_rate_raw": 0.2584,
+      "delivery_rate_smoothed": 0.2588,
+      "unprocessed_placekeys": 204,
+      "unprocessed_with_website": 0,
+      "directory_rows": 3964
+    },
+    "advertising agency": {
+      "score": 0.0,
+      "attempted": 90,
+      "delivered": 23,
+      "delivery_rate_raw": 0.2556,
+      "delivery_rate_smoothed": 0.2586,
+      "unprocessed_placekeys": 137,
+      "unprocessed_with_website": 0,
+      "directory_rows": 1139
+    },
+    "digital product agency": {
+      "score": 0.0,
+      "attempted": 100,
+      "delivered": 25,
+      "delivery_rate_raw": 0.25,
+      "delivery_rate_smoothed": 0.2533,
+      "unprocessed_placekeys": 63,
+      "unprocessed_with_website": 0,
+      "directory_rows": 925
+    },
+    "marketing agency": {
+      "score": 0.0,
+      "attempted": 920,
+      "delivered": 193,
+      "delivery_rate_raw": 0.2098,
+      "delivery_rate_smoothed": 0.2106,
+      "unprocessed_placekeys": 328,
+      "unprocessed_with_website": 0,
+      "directory_rows": 6960
+    }
+  }
+}

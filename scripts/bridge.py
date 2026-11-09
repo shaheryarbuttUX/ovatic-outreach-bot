@@ -192,6 +192,30 @@ def main():
             except Exception:
                 pass
             fetch_error_rows = []
+    # Niche priority ordering (2026-11-09): check the highest-value
+    # niches first, using scores computed from Sheet history
+    # (scripts/niche_priority.json: smoothed delivery rate x
+    # unprocessed website rows). Only the ORDER of the candidate
+    # scan changes; every skip rule below (Pulled, seen domains,
+    # shard hash, FetchErrors) runs exactly as before. A missing
+    # or unreadable config falls back silently to sheet order.
+    try:
+        import json as _json
+        _cfg_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "niche_priority.json")
+        with open(_cfg_path, encoding="utf-8") as _fh:
+            _cfg = _json.load(_fh)
+        _order = _cfg.get("order", []) or []
+        _rank = {str(n).strip().lower(): i for i, n in enumerate(_order)}
+        _default_rank = len(_order)
+        directory = sorted(
+            directory,
+            key=lambda r: _rank.get(
+                str(r.get("niche", "") or "").strip().lower(), _default_rank),
+        )
+    except Exception:
+        pass
     for row in directory:
         if queued >= args.max_new:
             break
