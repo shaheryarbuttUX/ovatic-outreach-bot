@@ -73,5 +73,5 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/shaheryarbuttUX/ovatic-outreach-bot/actions/workflows/bridge.yml/dispatches \
               -d '{"ref":"main"}')
-          echo "bridge dispatch HTTP status: $STATUS"
+            echo "bridge dispatch HTTP status: $STATUS"
           fi
