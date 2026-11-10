@@ -1,0 +1,54 @@
+name: sortlist-extract
+on:
+  schedule:
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+    inputs:
+      max_new:
+        description: 'Max Directory rows this shard appends'
+        default: '5000'
+      dry_run:
+        description: 'Dry run: dedupe against the Sheet but append nothing (true/false)'
+        default: 'false'
+      categories:
+        description: 'Optional comma-separated Sortlist category slugs, e.g. web-design,seo (empty = all)'
+        default: ''
+      countries:
+        description: 'Optional comma-separated Sortlist country slugs, e.g. belgium-be,germany-de (empty = all)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  sortlist:
+    concurrency:
+      group: sortlist-extract-${{ matrix.shard }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Extract agency fuel from Sortlist directory pages
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          DRY=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY="--dry-run"; fi
+          CATS=""
+          if [ -n "${{ inputs.categories }}" ]; then CATS="--categories ${{ inputs.categories }}"; fi
+          COUNTRIES=""
+          if [ -n "${{ inputs.countries }}" ]; then COUNTRIES="--countries ${{ inputs.countries }}"; fi
+          python scripts/sortlist_extract.py --max-new "${{ inputs.max_new || '5000' }}" --shard ${{ matrix.shard }} --shards 6 $DRY $CATS $COUNTRIES
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "sortlist tick done, lead data lives in Google Sheet only, not in repo"
