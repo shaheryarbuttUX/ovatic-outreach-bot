@@ -778,7 +778,7 @@ def main():
         sent_keys.add(("", row.get("website", "").strip().lower()))
         if row.get("status", "") == "delivered" and (row.get("sent_at", "") or "").startswith(today):
             delivered_today += 1
-    if delivered_today >= 2000:
+    if delivered_today >= 3000:
         print(f"send tick: success target reached today delivered={delivered_today}")
         return
     # Self-management, rule-based and free: a domain blocked as an
@@ -864,7 +864,7 @@ def main():
         browser = pw.chromium.launch(headless=True)
         page = browser.new_page()
         for row in sendable:
-            if delivered_today + delivered >= 2000:
+            if delivered_today + delivered >= 3000:
                 break
             if attempted >= args.max_send:
                 break
