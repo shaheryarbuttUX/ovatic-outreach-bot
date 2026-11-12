@@ -1,0 +1,49 @@
+name: cc-extract
+on:
+  schedule:
+    # 1st of the month, 08:00 UTC - one hour after overture-extract
+    # (07:00 UTC) so the two monthly fuel jobs never collide.
+    - cron: '0 8 1 * *'
+  workflow_dispatch:
+    inputs:
+      crawl:
+        description: 'Crawl id, e.g. CC-MAIN-2026-43 (empty = newest with a published URL Index)'
+        default: ''
+      max_new:
+        description: 'Max Directory rows this shard appends'
+        default: '5000'
+      dry_run:
+        description: 'Dry run: dedupe against the Sheet but append nothing (true/false)'
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  cc:
+    concurrency:
+      group: cc-extract-${{ matrix.shard }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install DuckDB and Sheet packages
+        run: pip install duckdb==2.0.0 google-api-python-client google-auth
+      - name: Extract agency fuel from the Common Crawl URL Index
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          DRY=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY="--dry-run"; fi
+          python scripts/cc_extract.py --crawl "${{ inputs.crawl || '' }}" --max-new "${{ inputs.max_new || '5000' }}" --shard ${{ matrix.shard }} --shards 6 $DRY
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "cc-extract tick done, lead data lives in Google Sheet only, not in repo"
