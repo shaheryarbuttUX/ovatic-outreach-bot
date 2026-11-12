@@ -528,15 +528,20 @@ def classify_host(host):
         locality = country_name
     m = LOC_RE.search(text)
     if m:
-        code, cname, loc = LOC_WORDS[m.group(1).lower()]
-        # A text location beats a bare .eu TLD; otherwise the TLD
-        # (usually a country suffix) is the more precise signal.
-        if not tld or tld[0] == "EU":
-            country_code, country_name, locality = code, cname, loc
-            if loc != cname:
-                locality = f"{loc}, {cname}"
-        elif not locality:
-            locality = country_name
+        hit = LOC_WORDS.get(m.group(1).lower())
+        if hit:
+            code, cname, loc = hit
+            # A text location beats a bare .eu TLD; otherwise the TLD
+            # (usually a country suffix) is the more precise signal.
+            if not tld or tld[0] == "EU":
+                country_code, country_name, locality = code, cname, loc
+                if loc != cname:
+                    locality = f"{loc}, {cname}"
+            elif not locality:
+                locality = country_name
+        # else: re.IGNORECASE can match a word whose .lower() is not a
+        # dict key (e.g. long-s 'ſ' folds to 's' when matching but not
+        # when lowercased); ignore the hit instead of crashing.
     if not country_code:
         return ("no_location", "", "", "", "", "")
     if country_code not in IN_SCOPE_COUNTRIES:
@@ -690,7 +695,11 @@ def main():
     delay = args.delay
 
     def _classify(host):
-        result = classify_host(host)
+        try:
+            result = classify_host(host)
+        except Exception as e:  # one bad host must never kill a shard
+            print(f"cc: classify failed {host}: {e!r}", flush=True)
+            return host, ("error", "", "", "", "", "")
         time.sleep(delay)
         return host, result
 
