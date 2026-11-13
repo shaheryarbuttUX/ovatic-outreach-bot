@@ -1,0 +1,43 @@
+name: urlscan-extract
+on:
+  schedule:
+    # Sunday 08:00 UTC, weekly. One hour after the Sortlist weekly
+    # run (07:00 UTC) so the two weekly fuel jobs never collide.
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
+    inputs:
+      phrases:
+        description: 'Comma-separated page-title phrases, e.g. web design agency,digital marketing agency (empty = default 12-phrase list)'
+        default: ''
+      max_new:
+        description: 'Max Directory rows appended in total'
+        default: '5000'
+      dry_run:
+        description: 'Dry run: dedupe against the Sheet but append nothing (true/false)'
+        default: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  urlscan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Extract agency fuel from urlscan.io search
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          ARGS=(--max-new "${{ inputs.max_new || '5000' }}")
+          if [ "${{ inputs.dry_run }}" = "true" ]; then ARGS+=(--dry-run); fi
+          if [ -n "${{ inputs.phrases }}" ]; then ARGS+=(--phrases "${{ inputs.phrases }}"); fi
+          python scripts/urlscan_extract.py "${ARGS[@]}"
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "urlscan tick done, lead data lives in Google Sheet only, not in repo"
