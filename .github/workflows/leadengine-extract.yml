@@ -1,0 +1,54 @@
+name: leadengine-extract
+on:
+  schedule:
+    # Daily, 03:00 UTC. LeadEngine search returns newest first, so each
+    # shard reads from its own deep offset (LEState tab) where companies
+    # are old enough to have a website.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      max_new:
+        description: 'Max Directory rows this shard appends'
+        default: '50'
+      window:
+        description: 'Search rows read per run per shard'
+        default: '1000'
+      dry_run:
+        description: 'Dry run: verify against the Sheet but append nothing and do not advance the cursor (true/false)'
+        default: 'true'
+      start_offset:
+        description: 'Override the LEState cursor for this run only (empty = use the stored cursor)'
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  leadengine:
+    concurrency:
+      group: leadengine-extract-${{ matrix.shard }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Sheet packages
+        run: pip install google-api-python-client google-auth
+      - name: Extract agency fuel from LeadEngine
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEADENGINE_TOKEN: ${{ secrets.LEADENGINE_TOKEN }}
+        run: |
+          DRY=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY="--dry-run"; fi
+          python scripts/leadengine_extract.py --max-new "${{ inputs.max_new || '50' }}" --window "${{ inputs.window || '1000' }}" --start-offset "${{ inputs.start_offset }}" --shard ${{ matrix.shard }} --shards 6 $DRY
+      - name: Log count only, never lead names (public repo logs are public)
+        run: echo "leadengine-extract tick done, lead data lives in Google Sheet only, not in repo"
