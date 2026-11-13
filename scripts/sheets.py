@@ -73,9 +73,14 @@ def append_values(tab_range, rows):
         return
     service, sheet_id = _client()
     body = {"values": rows}
+    # INSERT_ROWS (not the API default OVERWRITE): several workflows/shards
+    # append concurrently (maps, bridge, extractors). With OVERWRITE two
+    # appends landing in the same instant can overwrite each other -- that
+    # is how LeadEngine run #2's 2 appended rows vanished on 2026-11-13.
     _run(service.spreadsheets().values().append(
         spreadsheetId=sheet_id, range=tab_range,
-        valueInputOption="USER_ENTERED", body=body
+        valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
+        body=body
     ), f"append {tab_range}")
 
 
